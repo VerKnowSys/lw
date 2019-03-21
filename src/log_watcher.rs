@@ -36,7 +36,6 @@ use chrono::Local;
 use colored::Colorize;
 use log::LevelFilter;
 use fern::Dispatch;
-use fern::colors::Color;
 
 
 /// FileAndPosition alias type for list of tuples of File path and Cursor positions
@@ -48,7 +47,7 @@ const MAX_DIR_DEPTH: usize = 3;
 
 
 fn fatal<S: Display>(fmt: S) -> ! {
-    error!("ERROR: {}", fmt);
+    error!("ERROR: {}", fmt.to_string().red());
     exit(1)
 }
 
@@ -166,13 +165,12 @@ fn handle_file_event(states: &mut FileAndPosition, file_path: String) {
                     .seek(SeekFrom::Start(*cursor_position as u64))
                     .unwrap_or_else(|_| 0);
 
-                println!("");
+                println!(); // just start new entry from \n
                 info!("{}", file_path.blue());
                 let content: Vec<String>
                     = cursor
                         .lines()
                         .filter_map(|line| line.ok())
-                        .map(|line| format!("{}", line))
                         .collect();
                 println!("{}", content.join("\n"));
 
