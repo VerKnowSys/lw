@@ -19,7 +19,7 @@ use chrono::Local;
 use colored::Colorize;
 use log::LevelFilter;
 use fern::Dispatch;
-use fern::colors::{Color, ColoredLevelConfig};
+use fern::colors::Color;
 
 
 /// FileAndPosition alias type for list of tuples of File path and Cursor positions
@@ -45,7 +45,7 @@ fn main() {
 
     // Dispatch logger:
     Dispatch::new()
-        .format(move |out, message, record| {
+        .format(move |out, message, _record| {
             out.finish(format_args!(
                 "{}: {}",
                 Local::now().to_rfc3339().black(),
