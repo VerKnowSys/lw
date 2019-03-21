@@ -17,6 +17,9 @@ fern = { version = "0.5", features = ["colored"] } # my fav Logger extension for
 colored = "1.6" # ANSI coloring for terminal
 libc = "0.2" # access to libc functions
 kqueue = "0.2" # kqueue Rust API for Kqueue
-kqueue-sys = "0.1" # kqueue event system library wrapper
+kqueue-sys = { version = "0.1.4", git = "https://github.com/VerKnowSys/rust-kqueue-sys" } # kqueue event system library wrapper
 walkdir = "1.0" # recursive dir traversing
 chrono = "0.4" # time and data utils
+
+[patch.crates-io] # for now using my version of the crate that supports also Darwin hosts
+kqueue-sys = { version = "0.1.4", git = 'https://github.com/VerKnowSys/rust-kqueue-sys' }
