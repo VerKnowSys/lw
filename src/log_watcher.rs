@@ -1,3 +1,20 @@
+//! "lw" log-watcher utility
+
+//! Crate docs
+
+#![deny(
+    missing_docs,
+    unstable_features,
+    unsafe_code,
+    missing_debug_implementations,
+    missing_copy_implementations,
+    trivial_casts,
+    trivial_numeric_casts,
+    unused_import_braces,
+    unused_qualifications
+)]
+
+
 #[macro_use]
 extern crate log;
 
@@ -161,7 +178,7 @@ fn handle_file_event(states: &mut FileAndPosition, file_path: String) {
 
                 states
                     .insert(
-                        file_path.to_string(), file_size as usize
+                        file_path.to_string(), file_size
                     );
             }
         },
