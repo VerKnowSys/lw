@@ -17,7 +17,6 @@
 
 #[macro_use]
 extern crate log;
-extern crate kqueue_sys;
 
 use kqueue_sys::*;
 use kqueue::*;
