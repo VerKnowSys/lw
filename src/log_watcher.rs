@@ -1,6 +1,6 @@
 //! "lw" log-watcher utility
 
-//! Crate docs
+//! LW docs
 
 #![deny(
     missing_docs,
@@ -17,6 +17,7 @@
 
 #[macro_use]
 extern crate log;
+extern crate kqueue_sys;
 
 use kqueue_sys::*;
 use kqueue::*;
@@ -39,7 +40,7 @@ use fern::Dispatch;
 
 
 /// FileAndPosition alias type for list of tuples of File path and Cursor positions
-type FileAndPosition = HashMap<String, usize>;
+type FileAndPosition = HashMap<String, u64>;
 
 const STDOUT_DEV: &str = "/dev/stdout";
 const MIN_DIR_DEPTH: usize = 1;
@@ -77,27 +78,34 @@ fn main() {
                 )
         )
         .apply()
-        .map_err(|err| {
+        .unwrap_or_else(|err| {
             fatal(format!("{}: Couldn't initialize Log-Watcher. Details: {}",
                    "FATAL ERROR".red(), err.to_string().yellow()));
-        })
-        .unwrap();
+        });
 
     // mutable hashmap keeping position of all watched files:
     let mut watched_file_states = FileAndPosition::new();
 
     // mutable kqueue watcher:
-    let mut kqueue_watcher = Watcher::new().unwrap_or_else(|e| fatal(format!("Could not create kq watcher: {}", e)));
-    let paths_to_watch: Vec<_>
+    let mut kqueue_watcher
+        = Watcher::new()
+            .unwrap_or_else(|e| fatal(format!("Could not create kq watcher: {}", e)));
+
+    // read paths given as arguments:
+    let paths_to_watch: Vec<String>
         = env::args()
             .skip(1) // first arg is $0
             .collect();
 
+    if paths_to_watch.is_empty() {
+        fatal("No paths specified as arguments! You have to specify at least a single file or directory to watch!");
+    }
+
     debug!("Watching paths: {}", paths_to_watch.join(", "));
     paths_to_watch
         .iter()
-        .for_each(|path| // Resursively filter out all unreadable/unaccessible/inproper files:
-            WalkDir::new(Path::new(&path))
+        .for_each(|a_path| // Resursively filter out all unreadable/unaccessible/inproper files:
+            WalkDir::new(Path::new(&a_path))
                 .follow_links(true)
                 .min_depth(MIN_DIR_DEPTH)
                 .max_depth(MAX_DIR_DEPTH)
@@ -116,8 +124,8 @@ fn main() {
         .iter()
         .for_each(|kqueue_event| {
             match kqueue_event.ident {
-                Filename(_file_descriptor, file_path) =>
-                    handle_file_event(&mut watched_file_states, file_path.to_string()),
+                Filename(_file_descriptor, abs_file_name) =>
+                    handle_file_event(&mut watched_file_states, &abs_file_name),
 
                 Fd(file_descriptor) =>
                     debug!("New event: FD: {}", file_descriptor),
@@ -146,45 +154,52 @@ fn watch_file(kqueue_watcher: &mut Watcher, file: &Path) {
 }
 
 
-fn handle_file_event(states: &mut FileAndPosition, file_path: String) {
-    let file_for_cursor
+fn handle_file_event(states: &mut FileAndPosition, file_path: &str) {
+    let file_entry_in_hashmap
         = states
             .iter()
             .find(|hashmap| *hashmap.0 == file_path);
 
-    match file_for_cursor {
-        Some((a_file, cursor_position)) => {
-            let file_size = metadata(&a_file)
-                                .unwrap()
-                                .len() as usize;
-
-            if *cursor_position < file_size {
-                let watched_file = File::open(&a_file).unwrap();
-                let mut cursor = BufReader::new(watched_file);
-                cursor
-                    .seek(SeekFrom::Start(*cursor_position as u64))
-                    .unwrap_or_else(|_| 0);
-
-                println!(); // just start new entry from \n
-                info!("{}", file_path.blue());
-                let content: Vec<String>
-                    = cursor
-                        .lines()
-                        .filter_map(|line| line.ok())
-                        .collect();
-                println!("{}", content.join("\n"));
-
+    match file_entry_in_hashmap {
+        Some((watched_file, file_position)) => {
+            let file_size = match metadata(&watched_file) {
+                Ok(file_metadata) => file_metadata.len(),
+                Err(_) => 0,
+            };
+            if *file_position < file_size {
+                seek_file_to_position_and_print(&watched_file, *file_position);
                 states
-                    .insert(
-                        file_path.to_string(), file_size
-                    );
+                    .insert(file_path.to_string(), file_size);
             }
         },
 
         None => {
-            states.insert(
-                file_path, 0
-            );
+            states
+                .insert(file_path.to_string(), 0);
         }
+    }
+}
+
+
+fn seek_file_to_position_and_print(file_to_watch: &str, file_position: u64) {
+    match File::open(&file_to_watch) {
+        Ok(some_file) => {
+            let mut cursor = BufReader::new(some_file);
+            cursor
+                .seek(SeekFrom::Start(file_position))
+                .unwrap_or_else(|_| 0);
+            println!(); // just start new entry from \n
+            info!("{}", file_to_watch.blue());
+            let content: Vec<String>
+                = cursor
+                    .lines()
+                    .filter_map(|line| line.ok())
+                    .collect();
+            println!("{}", content.join("\n"));
+        },
+
+        Err(error_cause) =>
+            error!("Couldn't open file: {}. Error cause: {}",
+                   file_to_watch.yellow(), error_cause.to_string().red()),
     }
 }
