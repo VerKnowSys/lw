@@ -1,8 +1,10 @@
 [package]
 name = "lw"
-version = "0.2.1"
+version = "0.2.2"
 authors = ["Daniel (dmilith) Dettlaff <dmilith@me.com>"]
 description = "Log-Watcher utility - replacement for: `tail -F /some/path/*` - that uses Kqueue to watch also new files…"
+keywords = ["kqueue", "log", "watch", "tail", "view"]
+categories = ["filesystem"]
 homepage = "https://github.com/VerKnowSys/lw"
 license = "MIT"
 edition = "2018"
@@ -18,5 +20,5 @@ colored = "1.6" # ANSI coloring for terminal
 libc = "0.2" # access to libc functions
 walkdir = "1.0" # recursive dir traversing
 chrono = "0.4" # time and data utils
-kqueue = { version = "0.2.1", git = "https://github.com/VerKnowSys/rust-kqueue" } # kqueue Rust API for Kqueue
-kqueue-sys = { version = "0.1.4", git = "https://github.com/VerKnowSys/rust-kqueue-sys" } # kqueue event system library wrapper
+kqueue2 = "0.2" # kqueue Rust API for Kqueue
+kqueue2-sys = "0.1" # kqueue event system library wrapper
