@@ -18,9 +18,9 @@
 #[macro_use]
 extern crate log;
 
-use kqueue_sys::*;
-use kqueue::*;
-use kqueue::Ident::*;
+use kqueue2_sys::*;
+use kqueue2::*;
+use kqueue2::Ident::*;
 use std::io::prelude::*;
 use std::io::{SeekFrom, BufReader};
 use std::fs::File;
