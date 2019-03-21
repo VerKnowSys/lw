@@ -1,0 +1,16 @@
+[package]
+name = "lw"
+version = "0.1.0"
+authors = ["Daniel (dmilith) Dettlaff <dmilith@me.com>"]
+edition = "2018"
+
+[[bin]]
+name = "lw"
+path = "src/log_watcher.rs"
+
+[dependencies]
+libc = "0.2"
+kqueue = "0.2"
+kqueue-sys = "0.1"
+walkdir = "1.0"
+chrono = "0.4"
