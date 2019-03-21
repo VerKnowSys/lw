@@ -1,6 +1,6 @@
 [package]
 name = "lw"
-version = "0.1.0"
+version = "0.2.0"
 authors = ["Daniel (dmilith) Dettlaff <dmilith@me.com>"]
 description = "Log-Watcher utility - replacement for: `tail -F /some/path/*` - that uses Kqueue to watch also new files…"
 homepage = "https://github.com/VerKnowSys/lw"
