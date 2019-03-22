@@ -119,71 +119,71 @@ fn main() {
                 .for_each(|element| watch_file(&mut kqueue_watcher, element.path()));
         });
 
-        if kqueue_watcher
-            .watch()
-            .is_ok() {
+    if kqueue_watcher
+        .watch()
+        .is_ok() {
 
-            // handle events dynamically, including new files
-            while let Some(an_event) = kqueue_watcher.iter().next() {
-                match an_event.ident {
-                    Filename(_file_descriptor, abs_file_name) => {
-                        match metadata(Path::new(&abs_file_name)) {
-                            Ok(metadata) => {
-                                if metadata.is_dir() { // handle dirs
-                                    debug!("{}: {}", "+DirLoad".magenta(), abs_file_name.cyan());
-                                    WalkDir::new(&abs_file_name)
-                                        .follow_links(true)
-                                        .min_depth(MIN_DIR_DEPTH)
-                                        .max_depth(MAX_DIR_DEPTH)
-                                        .into_iter()
-                                        .filter_map(|element| element.ok())
-                                        .for_each(|element| watch_file(&mut kqueue_watcher, element.path()));
-                                    kqueue_watcher
-                                        .watch()
-                                        .is_ok();
-                                } else { // handle files
-                                    debug!("{}: {}", "+New".magenta(), abs_file_name.cyan());
-                                    watch_file(&mut kqueue_watcher, Path::new(&abs_file_name));
-                                    kqueue_watcher
-                                        .watch()
-                                        .is_ok();
-                                    handle_file_event(&mut watched_file_states, &abs_file_name);
-                                }
-                            },
-
-                            Err(error_cause) => {
-                                // handle situation when logs are wiped out and unavailable to read anymore
-                                error!("Metadata read failed for file: {}. Error cause: {}",
-                                       &abs_file_name.cyan(), error_cause.to_string().red());
-                                debug!("{}: {}", "-Watch".magenta(), abs_file_name.cyan());
+        // handle events dynamically, including new files
+        while let Some(an_event) = kqueue_watcher.iter().next() {
+            match an_event.ident {
+                Filename(_file_descriptor, abs_file_name) => {
+                    match metadata(Path::new(&abs_file_name)) {
+                        Ok(metadata) => {
+                            if metadata.is_dir() { // handle dirs
+                                debug!("{}: {}", "+DirLoad".magenta(), abs_file_name.cyan());
+                                WalkDir::new(&abs_file_name)
+                                    .follow_links(true)
+                                    .min_depth(MIN_DIR_DEPTH)
+                                    .max_depth(MAX_DIR_DEPTH)
+                                    .into_iter()
+                                    .filter_map(|element| element.ok())
+                                    .for_each(|element| watch_file(&mut kqueue_watcher, element.path()));
                                 kqueue_watcher
-                                    .remove_filename(Path::new(&abs_file_name), EventFilter::EVFILT_VNODE)
-                                    .unwrap_or_else(|error_cause| error!("Could not remove watch on file: {:?}. Error cause: {}",
-                                                                         abs_file_name.cyan(), error_cause.to_string().red()));
-                                // try to build list if path exists
-                                if Path::new(&abs_file_name).exists() {
-                                    WalkDir::new(&abs_file_name)
-                                        .follow_links(true)
-                                        .min_depth(MIN_DIR_DEPTH)
-                                        .max_depth(MAX_DIR_DEPTH)
-                                        .into_iter()
-                                        .filter_map(|element| element.ok())
-                                        .for_each(|element| watch_file(&mut kqueue_watcher, element.path()));
-                                    kqueue_watcher
-                                        .watch()
-                                        .is_ok();
-                                } else {
-                                    fatal("Unable to find any dirs/files to watch!");
-                                }
+                                    .watch()
+                                    .is_ok();
+                            } else { // handle files
+                                debug!("{}: {}", "+New".magenta(), abs_file_name.cyan());
+                                watch_file(&mut kqueue_watcher, Path::new(&abs_file_name));
+                                kqueue_watcher
+                                    .watch()
+                                    .is_ok();
+                                handle_file_event(&mut watched_file_states, &abs_file_name);
                             }
-                        };
-                    },
+                        },
 
-                    event =>
-                        warn!("Unknown event: {:?}", event)
-                }
+                        Err(error_cause) => {
+                            // handle situation when logs are wiped out and unavailable to read anymore
+                            error!("Metadata read failed for file: {}. Error cause: {}",
+                                   &abs_file_name.cyan(), error_cause.to_string().red());
+                            debug!("{}: {}", "-Watch".magenta(), abs_file_name.cyan());
+                            kqueue_watcher
+                                .remove_filename(Path::new(&abs_file_name), EventFilter::EVFILT_VNODE)
+                                .unwrap_or_else(|error_cause| error!("Could not remove watch on file: {:?}. Error cause: {}",
+                                                                     abs_file_name.cyan(), error_cause.to_string().red()));
+                            // try to build list if path exists
+                            if Path::new(&abs_file_name).exists() {
+                                WalkDir::new(&abs_file_name)
+                                    .follow_links(true)
+                                    .min_depth(MIN_DIR_DEPTH)
+                                    .max_depth(MAX_DIR_DEPTH)
+                                    .into_iter()
+                                    .filter_map(|element| element.ok())
+                                    .for_each(|element| watch_file(&mut kqueue_watcher, element.path()));
+                                kqueue_watcher
+                                    .watch()
+                                    .is_ok();
+                            } else {
+                                fatal("Unable to find any dirs/files to watch!");
+                            }
+                        }
+                    };
+                },
+
+                event =>
+                    warn!("Unknown event: {:?}", event)
             }
         }
+    }
 }
 
 
