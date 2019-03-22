@@ -164,7 +164,8 @@ fn watch_file(kqueue_watcher: &mut Watcher, file: &Path) {
             EventFilter::EVFILT_VNODE,
             NOTE_WRITE | NOTE_LINK | NOTE_RENAME | NOTE_DELETE // | NOTE_EXTEND | NOTE_ATTRIB | NOTE_REVOKE
         )
-        .unwrap_or_else(|error_cause| fatal(format!("Could not watch file {:?}: {}", file, error_cause)));
+        .unwrap_or_else(|error_cause| error!("Could not watch file {:?}. Error cause: {}",
+                                             file, error_cause.to_string().red()));
 }
 
 
