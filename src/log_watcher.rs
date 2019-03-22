@@ -108,6 +108,9 @@ fn main() {
             // Handle case when given a file as argument
             let file_path = Path::new(&a_path);
             watch_file(&mut kqueue_watcher, &file_path);
+
+            // Resursively filter out all unreadable/unaccessible/inproper and handle proper files
+            WalkDir::new(&file_path)
                 .follow_links(true)
                 .min_depth(MIN_DIR_DEPTH)
                 .max_depth(MAX_DIR_DEPTH)
@@ -145,7 +148,16 @@ fn main() {
 }
 
 
+/// kqueue flags, from: /usr/include/sys/event.h
+/// NOTE_DELETE     0x00000001              /* vnode was removed */
+/// NOTE_WRITE      0x00000002              /* data contents changed */
+/// NOTE_EXTEND     0x00000004              /* size increased */
+/// NOTE_ATTRIB     0x00000008              /* attributes changed */
+/// NOTE_LINK       0x00000010              /* link count changed */
+/// NOTE_RENAME     0x00000020              /* vnode was renamed */
+/// NOTE_REVOKE     0x00000040              /* vnode access was revoked */
 fn watch_file(kqueue_watcher: &mut Watcher, file: &Path) {
+    debug!("{}: {}", "+Watch".magenta(), format!("{:?}", file).cyan());
     kqueue_watcher
         .add_filename(
             &file,
@@ -164,6 +176,7 @@ fn handle_file_event(states: &mut FileAndPosition, file_path: &str) {
 
     match file_entry_in_hashmap {
         Some((watched_file, file_position)) => {
+            debug!("{}: {} {}", "+EventHandle".magenta(), watched_file.cyan(), format!("@{}", file_position).black());
             let file_size = match metadata(&watched_file) {
                 Ok(file_metadata) => file_metadata.len(),
                 Err(_) => 0,
