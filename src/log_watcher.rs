@@ -41,13 +41,19 @@ use fern::Dispatch;
 /// FileAndPosition alias type for list of tuples of File path and Cursor positions
 type FileAndPosition = HashMap<String, u64>;
 
+/// Defines stdout file
 const STDOUT_DEV: &str = "/dev/stdout";
+
+/// Minimum directory depth to watch
 const MIN_DIR_DEPTH: usize = 1;
+
+/// Maximum directory depth to watch
 const MAX_DIR_DEPTH: usize = 3;
 
 
+/// Utility to wrap fatal errors
 fn fatal<S: Display>(fmt: S) -> ! {
-    error!("ERROR: {}", fmt.to_string().red());
+    error!("FATAL ERROR: {}", fmt.to_string().red());
     exit(1)
 }
 
@@ -187,6 +193,8 @@ fn main() {
 /// NOTE_LINK       0x00000010              /* link count changed */
 /// NOTE_RENAME     0x00000020              /* vnode was renamed */
 /// NOTE_REVOKE     0x00000040              /* vnode access was revoked */
+///
+/// Add watch on specified file path
 fn watch_file(kqueue_watcher: &mut Watcher, file: &Path) {
     debug!("{}: {}", "+Watch".magenta(), format!("{:?}", file).cyan());
     kqueue_watcher
@@ -200,6 +208,7 @@ fn watch_file(kqueue_watcher: &mut Watcher, file: &Path) {
 }
 
 
+/// Handle action triggered by an event
 fn handle_file_event(states: &mut FileAndPosition, file_path: &str) {
     let file_entry_in_hashmap
         = states
@@ -228,6 +237,7 @@ fn handle_file_event(states: &mut FileAndPosition, file_path: &str) {
 }
 
 
+/// Set file position in bytes and print new file contents
 fn seek_file_to_position_and_print(file_to_watch: &str, file_position: u64) {
     match File::open(&file_to_watch) {
         Ok(some_file) => {
@@ -235,6 +245,8 @@ fn seek_file_to_position_and_print(file_to_watch: &str, file_position: u64) {
             cursor
                 .seek(SeekFrom::Start(file_position))
                 .unwrap_or_else(|_| 0);
+
+            // TODO: show same file header once per file, not per event
             println!(); // just start new entry from \n
             info!("{}", file_to_watch.blue());
             let content: Vec<String>
