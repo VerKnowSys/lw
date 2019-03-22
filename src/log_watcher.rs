@@ -96,15 +96,18 @@ fn main() {
             .skip(1) // first arg is $0
             .collect();
 
+    debug!("Watching paths: {}", paths_to_watch.join(", "));
     if paths_to_watch.is_empty() {
-        fatal("No paths specified as arguments! You have to specify at least a single file or directory to watch!");
+        fatal("No paths specified as arguments! You have to specify at least a single directory/file to watch!");
     }
 
-    debug!("Watching paths: {}", paths_to_watch.join(", "));
+    // initial watches for specified dirs/files:
     paths_to_watch
         .iter()
-        .for_each(|a_path| // Resursively filter out all unreadable/unaccessible/inproper files:
-            WalkDir::new(Path::new(&a_path))
+        .for_each(|a_path| {
+            // Handle case when given a file as argument
+            let file_path = Path::new(&a_path);
+            watch_file(&mut kqueue_watcher, &file_path);
                 .follow_links(true)
                 .min_depth(MIN_DIR_DEPTH)
                 .max_depth(MAX_DIR_DEPTH)
