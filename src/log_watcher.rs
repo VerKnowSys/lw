@@ -137,17 +137,18 @@ fn main() {
         while let Some(an_event) = kqueue_watcher.iter().next() {
             match an_event.ident {
                 Filename(_file_descriptor, abs_file_name) => {
-                    match metadata(Path::new(&abs_file_name)) {
+                    let file_path = Path::new(&abs_file_name);
+                    match metadata(file_path) {
                         Ok(metadata) => {
                             if metadata.is_dir() { // handle dirs
                                 debug!("{}: {}", "+DirLoad".magenta(), abs_file_name.cyan());
-                                walkdir_recursive(&mut kqueue_watcher, Path::new(&abs_file_name));
+                                walkdir_recursive(&mut kqueue_watcher, file_path);
                                 kqueue_watcher
                                     .watch()
                                     .is_ok();
                             } else { // handle files
                                 debug!("{}: {}", "+New".magenta(), abs_file_name.cyan());
-                                watch_file(&mut kqueue_watcher, Path::new(&abs_file_name));
+                                watch_file(&mut kqueue_watcher, file_path);
                                 kqueue_watcher
                                     .watch()
                                     .is_ok();
@@ -161,12 +162,12 @@ fn main() {
                                    &abs_file_name.cyan(), error_cause.to_string().red());
                             debug!("{}: {}", "-Watch".magenta(), abs_file_name.cyan());
                             kqueue_watcher
-                                .remove_filename(Path::new(&abs_file_name), EventFilter::EVFILT_VNODE)
+                                .remove_filename(file_path, EventFilter::EVFILT_VNODE)
                                 .unwrap_or_else(|error_cause| error!("Could not remove watch on file: {:?}. Error cause: {}",
                                                                      abs_file_name.cyan(), error_cause.to_string().red()));
                             // try to build list if path exists
-                            if Path::new(&abs_file_name).exists() {
-                                walkdir_recursive(&mut kqueue_watcher, Path::new(&abs_file_name));
+                            if file_path.exists() {
+                                walkdir_recursive(&mut kqueue_watcher, file_path);
                                 kqueue_watcher
                                     .watch()
                                     .is_ok();
