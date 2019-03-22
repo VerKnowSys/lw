@@ -149,8 +149,8 @@ fn watch_file(kqueue_watcher: &mut Watcher, file: &Path) {
     kqueue_watcher
         .add_filename(
             &file,
-            EventFilter::EVFILT_VNODE, // NOTE: no NOTE_TRUNCATE on Darwin + ignore on NOTE_ATTRIB and NOTE_EXTEND
-            NOTE_DELETE | NOTE_WRITE | NOTE_LINK | NOTE_RENAME | NOTE_REVOKE
+            EventFilter::EVFILT_VNODE,
+            NOTE_WRITE | NOTE_LINK | NOTE_RENAME | NOTE_DELETE // | NOTE_EXTEND | NOTE_ATTRIB | NOTE_REVOKE
         )
         .unwrap_or_else(|error_cause| fatal(format!("Could not watch file {:?}: {}", file, error_cause)));
 }
