@@ -52,6 +52,18 @@ fn fatal<S: Display>(fmt: S) -> ! {
 }
 
 
+/// Resursively filter out all unreadable/unaccessible/inproper and handle proper files
+fn walkdir_recursive(mut kqueue_watcher: &mut Watcher, file_path: &Path) {
+    WalkDir::new(&file_path)
+        .follow_links(true)
+        .min_depth(MIN_DIR_DEPTH)
+        .max_depth(MAX_DIR_DEPTH)
+        .into_iter()
+        .filter_map(|element| element.ok())
+        .for_each(|element| watch_file(&mut kqueue_watcher, element.path()));
+}
+
+
 fn main() {
     // Read value of DEBUG from env, if defined switch log level to Debug:
     let loglevel = match env::var("DEBUG") {
@@ -108,15 +120,7 @@ fn main() {
             // Handle case when given a file as argument
             let file_path = Path::new(&a_path);
             watch_file(&mut kqueue_watcher, &file_path);
-
-            // Resursively filter out all unreadable/unaccessible/inproper and handle proper files
-            WalkDir::new(&file_path)
-                .follow_links(true)
-                .min_depth(MIN_DIR_DEPTH)
-                .max_depth(MAX_DIR_DEPTH)
-                .into_iter()
-                .filter_map(|element| element.ok())
-                .for_each(|element| watch_file(&mut kqueue_watcher, element.path()));
+            walkdir_recursive(&mut kqueue_watcher, &file_path);
         });
 
     if kqueue_watcher
@@ -131,13 +135,7 @@ fn main() {
                         Ok(metadata) => {
                             if metadata.is_dir() { // handle dirs
                                 debug!("{}: {}", "+DirLoad".magenta(), abs_file_name.cyan());
-                                WalkDir::new(&abs_file_name)
-                                    .follow_links(true)
-                                    .min_depth(MIN_DIR_DEPTH)
-                                    .max_depth(MAX_DIR_DEPTH)
-                                    .into_iter()
-                                    .filter_map(|element| element.ok())
-                                    .for_each(|element| watch_file(&mut kqueue_watcher, element.path()));
+                                walkdir_recursive(&mut kqueue_watcher, Path::new(&abs_file_name));
                                 kqueue_watcher
                                     .watch()
                                     .is_ok();
@@ -162,13 +160,7 @@ fn main() {
                                                                      abs_file_name.cyan(), error_cause.to_string().red()));
                             // try to build list if path exists
                             if Path::new(&abs_file_name).exists() {
-                                WalkDir::new(&abs_file_name)
-                                    .follow_links(true)
-                                    .min_depth(MIN_DIR_DEPTH)
-                                    .max_depth(MAX_DIR_DEPTH)
-                                    .into_iter()
-                                    .filter_map(|element| element.ok())
-                                    .for_each(|element| watch_file(&mut kqueue_watcher, element.path()));
+                                walkdir_recursive(&mut kqueue_watcher, Path::new(&abs_file_name));
                                 kqueue_watcher
                                     .watch()
                                     .is_ok();
