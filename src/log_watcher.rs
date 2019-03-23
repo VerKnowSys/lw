@@ -38,7 +38,7 @@ use log::LevelFilter;
 use fern::Dispatch;
 
 
-/// FileAndPosition alias type for list of tuples of File path and Cursor positions
+/// FileAndPosition alias type for HashMap of File path and file cursor position (in bytes)
 type FileAndPosition = HashMap<String, u64>;
 
 /// Defines stdout file
