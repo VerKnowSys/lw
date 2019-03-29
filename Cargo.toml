@@ -20,5 +20,5 @@ colored = "1.6" # ANSI coloring for terminal
 libc = "0.2" # access to libc functions
 walkdir = "1.0" # recursive dir traversing
 chrono = "0.4" # time and data utils
-kqueue2 = "0.2" # kqueue Rust API for Kqueue
-kqueue2-sys = "0.1" # kqueue event system library wrapper
+kqueue = "0.2" # kqueue Rust API for Kqueue
+kqueue-sys = "0.2" # kqueue event system library wrapper
