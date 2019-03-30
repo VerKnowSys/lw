@@ -239,7 +239,7 @@ fn handle_file_event(states: &mut FileAndPosition, file_path: &str) {
 
 
 /// Set file position in bytes and print new file contents
-fn seek_file_to_position_and_print(file_to_watch: &str, file_position: u64) {
+fn seek_file_to_position_and_read(file_to_watch: &str, file_position: u64) -> Vec<String> {
     match File::open(&file_to_watch) {
         Ok(some_file) => {
             let mut cursor = BufReader::new(some_file);
