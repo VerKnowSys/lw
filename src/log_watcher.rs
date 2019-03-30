@@ -50,6 +50,9 @@ const MIN_DIR_DEPTH: usize = 1;
 /// Maximum directory depth to watch
 const MAX_DIR_DEPTH: usize = 3;
 
+/// Amount of bytes after we print header with file name
+const HEADER_AFTER_BYTES: u64 = 512;
+
 
 /// Utility to wrap fatal errors
 fn fatal<S: Display>(fmt: S) -> ! {
@@ -223,8 +226,17 @@ fn handle_file_event(states: &mut FileAndPosition, file_path: &str) {
                 Ok(file_metadata) => file_metadata.len(),
                 Err(_) => 0,
             };
+
+            // print header only when file is at beginning and not often than N bytes after previous one (limits header spam)
+            if *file_position + HEADER_AFTER_BYTES < file_size || *file_position == 0 {
+                println!(); // just start new entry from \n
+                info!("{}", watched_file.blue());
+            }
+
+            // print content of file that triggered the event
             if *file_position < file_size {
-                seek_file_to_position_and_print(&watched_file, *file_position);
+                let content = seek_file_to_position_and_read(&watched_file, *file_position);
+                println!("{}", content.join("\n"));
                 states
                     .insert(file_path.to_string(), file_size);
             }
@@ -246,20 +258,16 @@ fn seek_file_to_position_and_read(file_to_watch: &str, file_position: u64) -> Ve
             cursor
                 .seek(SeekFrom::Start(file_position))
                 .unwrap_or_else(|_| 0);
-
-            // TODO: show same file header once per file, not per event
-            println!(); // just start new entry from \n
-            info!("{}", file_to_watch.blue());
-            let content: Vec<String>
-                = cursor
-                    .lines()
-                    .filter_map(|line| line.ok())
-                    .collect();
-            println!("{}", content.join("\n"));
+            cursor
+                .lines()
+                .filter_map(|line| line.ok())
+                .collect()
         },
 
-        Err(error_cause) =>
+        Err(error_cause) => {
             error!("Couldn't open file: {}. Error cause: {}",
-                   file_to_watch.yellow(), error_cause.to_string().red()),
+                   file_to_watch.yellow(), error_cause.to_string().red());
+            vec![]
+        }
     }
 }
