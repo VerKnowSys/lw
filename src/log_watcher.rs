@@ -51,7 +51,7 @@ const MIN_DIR_DEPTH: usize = 1;
 const MAX_DIR_DEPTH: usize = 3;
 
 /// Amount of bytes after we print header with file name
-const HEADER_AFTER_BYTES: u64 = 512;
+const HEADER_AFTER_BYTES: u64 = 256;
 
 
 /// Utility to wrap fatal errors
