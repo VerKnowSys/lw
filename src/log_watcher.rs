@@ -63,7 +63,6 @@ fn fatal<S: Display>(fmt: S) -> ! {
 
 /// Resursively filter out all unreadable/unaccessible/inproper and handle proper files
 fn walkdir_recursive(mut kqueue_watcher: &mut Watcher, file_path: &Path) {
-    debug!("{}: {:?}", "+WalkDir".blue(), file_path);
     WalkDir::new(&file_path)
         .follow_links(true)
         .min_depth(MIN_DIR_DEPTH)
@@ -129,6 +128,7 @@ fn main() {
         .for_each(|a_path| {
             // Handle case when given a file as argument
             let file_path = Path::new(&a_path);
+            watch_file(&mut kqueue_watcher, &file_path);
             walkdir_recursive(&mut kqueue_watcher, &file_path);
         });
 
@@ -144,11 +144,17 @@ fn main() {
                     match metadata(file_path) {
                         Ok(metadata) => {
                             if metadata.is_dir() { // handle dirs
-                                debug!("{}: {}", "+DirLoad".magenta(), &abs_file_name.cyan());
+                                debug!("{}: {}", "+DirLoad".magenta(), abs_file_name.cyan());
                                 walkdir_recursive(&mut kqueue_watcher, file_path);
-
-                            } else { // handle file event
-                                debug!("{}: {}", "+New".magenta(), &abs_file_name.cyan());
+                                kqueue_watcher
+                                    .watch()
+                                    .is_ok();
+                            } else { // handle files
+                                debug!("{}: {}", "+New".magenta(), abs_file_name.cyan());
+                                watch_file(&mut kqueue_watcher, file_path);
+                                kqueue_watcher
+                                    .watch()
+                                    .is_ok();
                                 handle_file_event(&mut watched_file_states, &abs_file_name);
                             }
                         },
@@ -193,27 +199,16 @@ fn main() {
 /// NOTE_REVOKE     0x00000040              /* vnode access was revoked */
 ///
 /// Add watch on specified file path
-fn watch_file(kqueue_watcher: &mut Watcher, file_path: &Path) {
-    debug!("{}: {}", "-Watch".blue(), format!("{:?}", file_path).cyan());
-    kqueue_watcher
-        .remove_filename(file_path, EventFilter::EVFILT_VNODE)
-        .unwrap_or_else(|_| ()); // just ignore errors here
-    kqueue_watcher
-        .watch()
-        .is_ok();
-
-    debug!("{}: {}", "+Watch".magenta(), format!("{:?}", file_path).cyan());
+fn watch_file(kqueue_watcher: &mut Watcher, file: &Path) {
+    debug!("{}: {}", "+Watch".magenta(), format!("{:?}", file).cyan());
     kqueue_watcher
         .add_filename(
-            &file_path,
+            &file,
             EventFilter::EVFILT_VNODE,
-            NOTE_WRITE // | NOTE_DELETE | NOTE_LINK | NOTE_RENAME | NOTE_EXTEND | NOTE_ATTRIB | NOTE_REVOKE
+            NOTE_WRITE | NOTE_LINK | NOTE_RENAME | NOTE_DELETE // | NOTE_EXTEND | NOTE_ATTRIB | NOTE_REVOKE
         )
         .unwrap_or_else(|error_cause| error!("Could not watch file {:?}. Error cause: {}",
-                                             file_path, error_cause.to_string().red()));
-    kqueue_watcher
-        .watch()
-        .is_ok();
+                                             file, error_cause.to_string().red()));
 }
 
 
