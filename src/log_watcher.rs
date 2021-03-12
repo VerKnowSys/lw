@@ -98,11 +98,14 @@ fn fatal<S: Display>(fmt: S) -> ! {
 fn walkdir_recursive(mut kqueue_watcher: &mut Watcher, file_path: &Path) {
     WalkDir::new(&file_path)
         .follow_links(true)
-        .min_depth(MIN_DIR_DEPTH)
+        .contents_first(true)
+        .max_open(MAX_OPEN_FILES)
         .max_depth(MAX_DIR_DEPTH)
         .into_iter()
         .filter_map(|element| element.ok())
-        .for_each(|element| watch_file(&mut kqueue_watcher, element.path()));
+        .for_each(|element| {
+            watch_file(&mut kqueue_watcher, element.path());
+        });
 }
 
 
