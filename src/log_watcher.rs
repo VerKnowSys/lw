@@ -238,13 +238,29 @@ fn main() {
 ///
 /// Add watch on specified file path
 fn watch_file(kqueue_watcher: &mut Watcher, file: &Path) {
-    debug!("{}: {}", "+Watch".magenta(), format!("{:?}", file).cyan());
+    kqueue_watcher
+        .remove_filename(file, EventFilter::EVFILT_VNODE)
+        .map(|e| {
+            debug!("{}: {:?}", "-Watch".magenta(), file);
+            e
+        })
+        .unwrap_or_default();
     kqueue_watcher
         .add_filename(
             &file,
             EventFilter::EVFILT_VNODE,
-            NOTE_WRITE | NOTE_LINK | NOTE_RENAME | NOTE_DELETE | NOTE_EXTEND // | NOTE_ATTRIB | NOTE_REVOKE
+            NOTE_WRITE
+                | NOTE_LINK
+                | NOTE_RENAME
+                | NOTE_DELETE
+                | NOTE_EXTEND
+                | NOTE_ATTRIB
+                | NOTE_REVOKE,
         )
+        .map(|e| {
+            debug!("{}: {}", "+Watch".magenta(), format!("{:?}", file).cyan());
+            e
+        })
         .unwrap_or_else(|error_cause| {
             error!(
                 "Could not watch file {:?}. Error cause: {}",
