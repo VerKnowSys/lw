@@ -162,17 +162,15 @@ fn main() {
     }
 
     // initial watches for specified dirs/files:
-    {
-        paths_to_watch.into_iter().for_each(|a_path| {
-            // Handle case when given a file as argument
-            let file_path = Path::new(&a_path);
-            watch_file(&mut kqueue_watcher, &file_path);
-            walkdir_recursive(&mut kqueue_watcher, &file_path);
-        });
-    }
+    paths_to_watch.into_iter().for_each(|a_path| {
+        // Handle case when given a file as argument
+        walkdir_recursive(&mut kqueue_watcher, &Path::new(&a_path));
+    });
 
-    if kqueue_watcher.watch().is_ok() {
-        // handle events dynamically, including new files
+    // handle events dynamically, including new files
+    loop {
+        debug!("+Trigger: watch()");
+        kqueue_watcher.watch().unwrap_or_default();
         while let Some(an_event) = kqueue_watcher.iter().next() {
             match an_event.ident {
                 Filename(_file_descriptor, abs_file_name) => {
@@ -183,21 +181,19 @@ fn main() {
                                 // handle dirs
                                 debug!("{}: {}", "+DirLoad".magenta(), abs_file_name.cyan());
                                 walkdir_recursive(&mut kqueue_watcher, file_path);
-                                kqueue_watcher.watch().unwrap_or_default();
                             } else {
                                 // handle files
-                                debug!("{}: {}", "+New".magenta(), abs_file_name.cyan());
+                                handle_file_event(&mut watched_file_states, &abs_file_name);
                                 watch_file(&mut kqueue_watcher, file_path);
-                                kqueue_watcher.watch().unwrap_or_default();
                                 handle_file_event(&mut watched_file_states, &abs_file_name);
                             }
                         }
 
                         Err(error_cause) => {
                             // handle situation when logs are wiped out and unavailable to read anymore
-                            debug!("{}: {}", "-Watch".magenta(), abs_file_name.cyan());
                             kqueue_watcher
                                 .remove_filename(file_path, EventFilter::EVFILT_VNODE)
+                                .map(|e| {debug!("{}: {}", "-Watch".magenta(), abs_file_name.cyan()); e})
                                 .unwrap_or_else(|error| {
                                     error!(
                                         "Could not remove watch on file: {:?}. Error cause: {}",
@@ -207,17 +203,27 @@ fn main() {
                                 });
                             // try to build list if path exists
                             if file_path.exists() {
-                                walkdir_recursive(&mut kqueue_watcher, file_path);
-                                kqueue_watcher.watch().unwrap_or_default();
-                            } else {
-                                error!(
-                                    "Dropped watch on file/dir: {}. Error cause: {}",
-                                    format!("{:?}", &file_path).red(),
-                                    format!("{}", &error_cause).red()
-                                );
+                                if file_path.is_dir() {
+                                    debug!(
+                                        "{}: {}",
+                                        "+DirLoad".magenta(),
+                                        abs_file_name.cyan()
+                                    );
+                                    walkdir_recursive(&mut kqueue_watcher, file_path);
+                                } else if file_path.is_file() {
+                                    watch_file(&mut kqueue_watcher, file_path);
+                                } else {
+                                    error!(
+                                        "Dropped watch on file/dir: {}. Error cause: {}",
+                                        format!("{:?}", &file_path).red(),
+                                        format!("{}", &error_cause).red()
+                                    );
+                                }
                             }
                         }
                     };
+                    debug!("+Trigger: watch()");
+                    kqueue_watcher.watch().unwrap_or_default();
                 }
 
                 event => warn!("Unknown event: {:?}", event),
