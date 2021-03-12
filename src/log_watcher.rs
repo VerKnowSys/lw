@@ -80,14 +80,11 @@ type FileAndPosition = HashMap<String, u64>;
 /// Defines stdout file
 const STDOUT_DEV: &str = "/dev/stdout";
 
-/// Minimum directory depth to watch
-const MIN_DIR_DEPTH: usize = 1;
-
 /// Maximum directory depth to watch
-const MAX_DIR_DEPTH: usize = 3;
+const MAX_DIR_DEPTH: usize = 5;
 
-/// Amount of bytes after we print header with file name
-const HEADER_AFTER_BYTES: u64 = 256;
+/// Maximum watched files
+const MAX_OPEN_FILES: usize = 1023;
 
 
 /// Utility to wrap fatal errors
