@@ -59,8 +59,19 @@ use std::{
 use chrono::Local;
 use colored::Colorize;
 use fern::Dispatch;
+use lazy_static::lazy_static;
 use log::LevelFilter;
+use std::sync::Mutex;
 use walkdir::WalkDir;
+
+lazy_static! {
+    /// List of (to_notify, message, notifier name, webhook) tuples:
+    static ref LAST_FILE: Mutex<String> = Mutex::new({
+        #[allow(unused_mut)]
+        let mut string = String::new();
+        string
+    });
+}
 
 
 /// FileAndPosition alias type for HashMap of File path and file cursor position (in bytes)
@@ -246,40 +257,36 @@ fn watch_file(kqueue_watcher: &mut Watcher, file: &Path) {
 
 /// Handle action triggered by an event
 fn handle_file_event(states: &mut FileAndPosition, file_path: &str) {
-    let file_entry_in_hashmap = states.iter().find(|hashmap| *hashmap.0 == file_path);
+    let watched_file = file_path.to_string();
+    let file_position = states.entry(watched_file.clone()).or_insert(0);
+    {
+        debug!(
+            "{}: {} {}",
+            "+EventHandle".magenta(),
+            watched_file.cyan(),
+            format!("@{}", file_position).black()
+        );
+        let file_size = match metadata(&watched_file) {
+            Ok(file_metadata) => file_metadata.len(),
+            Err(_) => 0,
+        };
 
-    match file_entry_in_hashmap {
-        Some((watched_file, file_position)) => {
-            debug!(
-                "{}: {} {}",
-                "+EventHandle".magenta(),
-                watched_file.cyan(),
-                format!("@{}", file_position).black()
-            );
-            let file_size = match metadata(&watched_file) {
-                Ok(file_metadata) => file_metadata.len(),
-                Err(_) => 0,
-            };
-
-            // print header only when file is at beginning and not often than N bytes after previous one (limits header spam)
-            if *file_position + HEADER_AFTER_BYTES < file_size || *file_position == 0 {
-                println!();
-                println!(); // just start new entry after \n\n
-                info!("{}", watched_file.blue());
-            }
-
-            // print content of file that triggered the event
-            if *file_position < file_size {
-                let content = seek_file_to_position_and_read(&watched_file, *file_position);
-                println!("{}", content.join("\n"));
-                states.insert(file_path.to_string(), file_size);
-            }
+        // print header only when file is at beginning and not often than N bytes after previous one (limits header spam)
+        if *file_position == 0 || *LAST_FILE.lock().unwrap() != watched_file {
+            println!();
+            println!(); // just start new entry after \n\n
+            info!("{}", watched_file.blue());
         }
 
-        None => {
-            states.insert(file_path.to_string(), 0);
+        // print content of file that triggered the event
+        if *file_position < file_size {
+            let content = seek_file_to_position_and_read(&watched_file, *file_position);
+            println!("{}", content.join("\n"));
+            states.insert(watched_file.clone(), file_size);
         }
     }
+
+    *LAST_FILE.lock().unwrap() = watched_file;
 }
 
 
