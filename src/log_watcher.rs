@@ -123,11 +123,13 @@ fn main() {
             ))
         })
         .level(loglevel)
-        .chain(File::open(STDOUT_DEV).expect(&format!(
-            "{}: Couldn't open: {}!",
-            "FATAL ERROR".red(),
-            STDOUT_DEV.cyan()
-        )))
+        .chain(File::open(STDOUT_DEV).unwrap_or_else(|_| {
+            panic!(
+                "{}: Couldn't open: {}!",
+                "FATAL ERROR".red(),
+                STDOUT_DEV.cyan()
+            )
+        }))
         .apply()
         .expect("Couldn't initialize Fern logger!");
 
