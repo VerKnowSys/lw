@@ -158,8 +158,7 @@ fn main() {
 
     // handle events dynamically, including new files
     loop {
-        trace!("{}: watch()", "+Trigger".magenta());
-        kqueue_watcher.watch().unwrap_or_default();
+        watch_the_watcher(&mut kqueue_watcher);
         while let Some(an_event) = kqueue_watcher.iter().next() {
             debug!("Watched files: {}", watched_file_states.iter().count());
             debug!(
@@ -177,9 +176,41 @@ fn main() {
                                 walkdir_recursive(&mut kqueue_watcher, file_path);
                             } else {
                                 // handle files
-                                handle_file_event(&mut watched_file_states, &abs_file_name);
-                                watch_file(&mut kqueue_watcher, file_path);
-                                handle_file_event(&mut watched_file_states, &abs_file_name);
+                                let file_size = metadata.len();
+                                let initial_file_position = if (file_size - TAIL_BYTES) as i64
+                                    > 0
+                                    && !watched_file_states.contains_key(&abs_file_name)
+                                {
+                                    file_size - TAIL_BYTES
+                                } else {
+                                    watched_file_states.get(&abs_file_name).unwrap_or(&0) - 0
+                                };
+
+                                if watched_file_states.contains_key(&abs_file_name) {
+                                    let current_position = watched_file_states
+                                        .get(&abs_file_name)
+                                        .unwrap_or(&initial_file_position)
+                                        - 0;
+                                    handle_file_event(
+                                        current_position,
+                                        file_size,
+                                        &abs_file_name,
+                                    );
+                                    let _removed = watched_file_states
+                                        .remove(&abs_file_name)
+                                        .unwrap_or_default();
+                                    watched_file_states
+                                        .insert(abs_file_name.clone(), file_size);
+                                } else {
+                                    watched_file_states
+                                        .insert(abs_file_name.clone(), initial_file_position);
+                                    handle_file_event(
+                                        initial_file_position,
+                                        file_size,
+                                        &abs_file_name,
+                                    );
+                                }
+                                break;
                             }
                         }
 
@@ -223,14 +254,20 @@ fn main() {
                             }
                         }
                     };
-                    trace!("{}: watch()", "+Trigger".magenta());
-                    kqueue_watcher.watch().unwrap_or_default();
+                    watch_the_watcher(&mut kqueue_watcher);
                 }
 
                 event => warn!("Unknown event: {}", format!("{:?}", event).cyan()),
             }
         }
     }
+}
+
+
+/// Kqueue wrapper for watch()
+fn watch_the_watcher(kqueue_watcher: &mut Watcher) {
+    trace!("{}: watch()", "+Trigger".magenta());
+    kqueue_watcher.watch().unwrap_or_default();
 }
 
 
