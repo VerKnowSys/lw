@@ -161,64 +161,10 @@ fn main() {
             debug!("Watched files: {}", watched_file_states.iter().count());
             match an_event.ident {
                 Filename(_file_descriptor, abs_file_name) => {
-                    let file_path = Path::new(&abs_file_name);
-                    match metadata(file_path) {
-                        Ok(file_metadata) => {
-                            if file_metadata.is_dir() {
-                                trace!("{}: {}", "+DirLoad".magenta(), abs_file_name.cyan());
-                                walkdir_recursive(&mut kqueue_watcher, file_path);
-                            } else {
-                                calculate_position_and_handle(
-                                    file_metadata.len(),
-                                    &mut watched_file_states,
-                                    &abs_file_name,
-                                );
-                            }
-                        }
-
-                        Err(error_cause) => {
-                            // handle situation when logs are wiped out and unavailable to read anymore
-                            kqueue_watcher
-                                .remove_filename(file_path, EventFilter::EVFILT_VNODE)
-                                .map(|e| {trace!("{}: {}", "-Watch".magenta(), abs_file_name.cyan()); e})
-                                .unwrap_or_else(|error| {
-                                    error!(
-                                        "Could not remove watch on file: {:?}. Error cause: {}",
-                                        abs_file_name.cyan(),
-                                        error.to_string().red()
-                                    )
-                                });
-                            // try to build list if path exists
-                            if file_path.exists() {
-                                if file_path.is_dir() {
-                                    trace!(
-                                        "{}: {}",
-                                        "+DirLoad".magenta(),
-                                        abs_file_name.cyan()
-                                    );
-                                    walkdir_recursive(&mut kqueue_watcher, file_path);
-                                } else if file_path.is_file() {
-                                    watch_file(&mut kqueue_watcher, file_path);
-                                }
-                            } else {
-                                debug!(
-                                    "Dropped watch on file/dir: {}. Last value: {}. Error cause: {}",
-                                    format!("{:?}", &file_path).cyan(),
-                                    format!(
-                                        "{}",
-                                        watched_file_states
-                                            .remove(&abs_file_name)
-                                            .unwrap_or_default()
-                                    )
-                                    .cyan(),
-                                    format!("{}", &error_cause).red()
-                                );
-                            }
-                        }
-                    };
-                    debug!(
-                        "Watched files list: [{}]",
-                        format!("{:?}", watched_file_states).cyan()
+                    process_file_event(
+                        &abs_file_name,
+                        &mut kqueue_watcher,
+                        &mut watched_file_states,
                     );
                     watch_the_watcher(&mut kqueue_watcher);
                 }
@@ -230,7 +176,75 @@ fn main() {
 }
 
 
-/// Process file position
+/// Process file with event
+fn process_file_event(
+    abs_file_name: &str,
+    kqueue_watcher: &mut Watcher,
+    watched_file_states: &mut FileAndPosition,
+) {
+    let file_path = Path::new(&abs_file_name);
+    match metadata(file_path) {
+        Ok(file_metadata) => {
+            if file_metadata.is_dir() {
+                trace!("{}: {}", "+DirLoad".magenta(), abs_file_name.cyan());
+                walkdir_recursive(kqueue_watcher, file_path);
+            } else {
+                trace!("{}: {}", "+FileWatchHandle".magenta(), abs_file_name.cyan());
+                calculate_position_and_handle(
+                    file_metadata.len(),
+                    watched_file_states,
+                    &abs_file_name,
+                );
+            }
+        }
+
+        Err(error_cause) => {
+            // handle situation when logs are wiped out and unavailable to read anymore
+            kqueue_watcher
+                .remove_filename(file_path, EventFilter::EVFILT_VNODE)
+                .map(|e| {
+                    trace!("{}: {}", "-Watch".magenta(), abs_file_name.cyan());
+                    e
+                })
+                .unwrap_or_else(|error| {
+                    error!(
+                        "Could not remove watch on file: {:?}. Error cause: {}",
+                        abs_file_name.cyan(),
+                        error.to_string().red()
+                    )
+                });
+            // try to build list if path exists
+            if file_path.exists() {
+                if file_path.is_dir() {
+                    trace!("{}: {}", "+DirLoad".magenta(), abs_file_name.cyan());
+                    walkdir_recursive(kqueue_watcher, file_path);
+                } else if file_path.is_file() {
+                    watch_file(kqueue_watcher, file_path);
+                }
+            } else {
+                debug!(
+                    "Dropped watch on file/dir: {}. Last value: {}. Error cause: {}",
+                    format!("{:?}", &file_path).cyan(),
+                    format!(
+                        "{}",
+                        watched_file_states
+                            .remove(abs_file_name)
+                            .unwrap_or_default()
+                    )
+                    .cyan(),
+                    format!("{}", &error_cause).red()
+                );
+            }
+        }
+    };
+    debug!(
+        "Watched files list: [{}]",
+        format!("{:?}", watched_file_states).cyan()
+    );
+}
+
+
+/// Process file position and handle the event
 fn calculate_position_and_handle(
     file_size: u64,
     watched_file_states: &mut FileAndPosition,
