@@ -171,13 +171,12 @@ fn main() {
                     match metadata(file_path) {
                         Ok(metadata) => {
                             if metadata.is_dir() {
-                                // handle dirs
                                 trace!("{}: {}", "+DirLoad".magenta(), abs_file_name.cyan());
                                 walkdir_recursive(&mut kqueue_watcher, file_path);
                             } else {
-                                // handle files
                                 let file_size = metadata.len();
-                                let initial_file_position = if (file_size - TAIL_BYTES) as i64
+                                let initial_file_position = if (file_size as i64)
+                                    - (TAIL_BYTES as i64)
                                     > 0
                                     && !watched_file_states.contains_key(&abs_file_name)
                                 {
