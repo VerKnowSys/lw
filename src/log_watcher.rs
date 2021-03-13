@@ -295,8 +295,8 @@ fn watch_file(kqueue_watcher: &mut Watcher, file: &Path) {
                 | NOTE_RENAME
                 | NOTE_DELETE
                 | NOTE_EXTEND
-                | NOTE_ATTRIB
-                | NOTE_REVOKE,
+                // | NOTE_ATTRIB
+                // | NOTE_REVOKE,
         )
         .map(|e| {
             trace!("{}: {}", "+Watch".magenta(), format!("{:?}", file).cyan());
