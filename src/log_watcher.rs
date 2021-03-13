@@ -54,6 +54,7 @@ use std::{
     io::{prelude::*, BufReader, SeekFrom},
     path::Path,
     process::exit,
+    sync::Mutex,
 };
 
 use chrono::Local;
@@ -61,7 +62,6 @@ use colored::Colorize;
 use fern::Dispatch;
 use lazy_static::lazy_static;
 use log::LevelFilter;
-use std::sync::Mutex;
 use walkdir::WalkDir;
 
 lazy_static! {
@@ -128,19 +128,13 @@ fn main() {
         .level(loglevel)
         .chain(File::open(STDOUT_DEV).unwrap_or_else(|_| {
             fatal(format!(
-                "{}: STDOUT device {} is not available! Something is terribly wrong here!",
+                "{}: Couldn't open: {}! Something is terribly wrong here!",
                 "FATAL ERROR".red(),
                 STDOUT_DEV.yellow()
             ))
         }))
         .apply()
-        .unwrap_or_else(|err| {
-            fatal(format!(
-                "{}: Couldn't initialize Log-Watcher. Details: {}",
-                "FATAL ERROR".red(),
-                err.to_string().yellow()
-            ));
-        });
+        .expect("Couldn't initialize Fern logger!");
 
     // mutable hashmap keeping position of all watched files:
     let mut watched_file_states = FileAndPosition::new();
