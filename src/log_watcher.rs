@@ -329,11 +329,14 @@ fn seek_file_to_position_and_read(file_to_watch: &str, file_position: u64) -> Ve
     match File::open(&file_to_watch) {
         Ok(some_file) => {
             let mut cursor = BufReader::new(some_file);
-            cursor
-                .seek(SeekFrom::Start(file_position))
-                .unwrap_or_else(|_| 0);
-            cursor.lines().filter_map(|line| line.ok()).collect()
+            cursor.seek(SeekFrom::Start(file_position)).unwrap_or(0);
+            let lines_out: Vec<_> = cursor.lines().filter_map(|line| line.ok()).collect();
             trace!("Lines out: '{}'", format!("{:?}", lines_out).cyan());
+            if lines_out.is_empty() {
+                vec![String::from("* binary file modification *")]
+            } else {
+                lines_out
+            }
         }
 
         Err(error_cause) => {
