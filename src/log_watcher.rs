@@ -49,7 +49,6 @@ use kqueue2::{Ident::*, *};
 use std::{
     collections::HashMap,
     env,
-    fmt::Display,
     fs::{metadata, File},
     io::{prelude::*, BufReader, SeekFrom},
     path::Path,
@@ -86,12 +85,8 @@ const MAX_DIR_DEPTH: usize = 5;
 /// Maximum watched files
 const MAX_OPEN_FILES: usize = 1023;
 
-
-/// Utility to wrap fatal errors
-fn fatal<S: Display>(fmt: S) -> ! {
-    error!("FATAL ERROR: {}", fmt.to_string().red());
-    exit(1)
-}
+/// Read tail of this length from large files
+const TAIL_BYTES: u64 = 2048;
 
 
 /// Resursively filter out all unreadable/unaccessible/inproper and handle proper files
