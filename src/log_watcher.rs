@@ -279,9 +279,8 @@ fn watch_file(kqueue_watcher: &mut Watcher, file: &Path) {
 
 
 /// Handle action triggered by an event
-fn handle_file_event(states: &mut FileAndPosition, file_path: &str) {
+fn handle_file_event(file_position: u64, file_size: u64, file_path: &str) {
     let watched_file = file_path.to_string();
-    let file_position = states.entry(watched_file.clone()).or_insert(0);
     {
         debug!(
             "Watched file position: {}, file size: {}, file name: {}",
@@ -295,23 +294,18 @@ fn handle_file_event(states: &mut FileAndPosition, file_path: &str) {
             watched_file.cyan(),
             format!("@{}", file_position).black()
         );
-        let file_size = match metadata(&watched_file) {
-            Ok(file_metadata) => file_metadata.len(),
-            Err(_) => 0,
-        };
 
         // print header only when file is at beginning and not often than N bytes after previous one (limits header spam)
-        if *file_position == 0 || *LAST_FILE.lock().unwrap() != watched_file {
+        if file_position == 0 || *LAST_FILE.lock().unwrap() != watched_file {
             println!();
             println!(); // just start new entry after \n\n
             info!("{}", watched_file.blue());
         }
 
         // print content of file that triggered the event
-        if *file_position < file_size {
-            let content = seek_file_to_position_and_read(&watched_file, *file_position);
+        if file_position < file_size {
+            let content = seek_file_to_position_and_read(&watched_file, file_position);
             println!("{}", content.join("\n"));
-            states.insert(watched_file.clone(), file_size);
         }
     }
 
