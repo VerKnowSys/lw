@@ -331,8 +331,8 @@ fn handle_file_event(file_position: u64, file_size: u64, file_path: &str) {
     {
         debug!(
             "Watched file position: {}, file size: {}, file name: {}",
-            file_position,
-            file_size,
+            format!("{}", file_position).cyan(),
+            format!("{}", file_size).cyan(),
             watched_file.cyan()
         );
         trace!(
@@ -346,7 +346,11 @@ fn handle_file_event(file_position: u64, file_size: u64, file_path: &str) {
         if file_position == 0 || *LAST_FILE.lock().unwrap() != watched_file {
             println!();
             println!(); // just start new entry after \n\n
-            info!("{}", watched_file.blue());
+            info!(
+                "{} {}",
+                watched_file.blue(),
+                format!("@{}", file_position).black()
+            );
         }
 
         // print content of file that triggered the event
