@@ -21,10 +21,16 @@ Daniel ([@dmilith](https://twitter.com/dmilith)) Dettlaff
 
 - Works recursively through files/ directories but can be also used for single file monitoring
 
-- It's fast and DEBUG'able (through DEBUG env variable)
+- It's fast and DEBUG'able (through DEBUG and TRACE env variables)
 
-- Produces colorful output (especially in DEBUG mode).
+- Produces colorful output (especially in DEBUG and TRACE mode).
 
+
+## Installation:
+
+```sh
+cargo install --force lw
+```
 
 
 
