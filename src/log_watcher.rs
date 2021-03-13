@@ -53,24 +53,13 @@ use std::{
     io::{prelude::*, BufReader, SeekFrom},
     path::Path,
     process::exit,
-    sync::Mutex,
 };
 
 use chrono::Local;
 use colored::Colorize;
 use fern::Dispatch;
-use lazy_static::lazy_static;
 use log::LevelFilter;
 use walkdir::WalkDir;
-
-lazy_static! {
-    /// List of (to_notify, message, notifier name, webhook) tuples:
-    static ref LAST_FILE: Mutex<String> = Mutex::new({
-        #[allow(unused_mut)]
-        let mut string = String::new();
-        string
-    });
-}
 
 
 /// FileAndPosition alias type for HashMap of File path and file cursor position (in bytes)
@@ -139,6 +128,9 @@ fn main() {
     // mutable kqueue watcher:
     let mut kqueue_watcher = Watcher::new().expect("Could not create kq watcher!");
 
+    // name of the last logged file:
+    let mut last_file = String::new();
+
     // read paths given as arguments:
     let paths_to_watch: Vec<String> = env::args()
         .skip(1) // first arg is $0
@@ -167,6 +159,7 @@ fn main() {
                         &abs_file_name,
                         &mut kqueue_watcher,
                         &mut watched_file_states,
+                        &mut last_file,
                     );
                     watch_the_watcher(&mut kqueue_watcher);
                 }
@@ -183,6 +176,7 @@ fn process_file_event(
     abs_file_name: &str,
     kqueue_watcher: &mut Watcher,
     watched_file_states: &mut FileAndPosition,
+    last_file: &mut String,
 ) {
     let file_path = Path::new(&abs_file_name);
     match metadata(file_path) {
@@ -196,6 +190,7 @@ fn process_file_event(
                     file_metadata.len(),
                     watched_file_states,
                     &abs_file_name,
+                    last_file,
                 );
             }
         }
@@ -251,6 +246,7 @@ fn calculate_position_and_handle(
     file_size: u64,
     watched_file_states: &mut FileAndPosition,
     abs_file_name: &str,
+    last_file: &mut String,
 ) {
     let initial_file_position =
         if file_size + 1 > TAIL_BYTES && !watched_file_states.contains_key(abs_file_name) {
@@ -262,14 +258,14 @@ fn calculate_position_and_handle(
         let current_position = *watched_file_states
             .get(abs_file_name)
             .unwrap_or(&initial_file_position);
-        handle_file_event(current_position, file_size, abs_file_name);
+        handle_file_event(current_position, file_size, abs_file_name, last_file);
         let _removed = watched_file_states
             .remove(abs_file_name)
             .unwrap_or_default();
         watched_file_states.insert(abs_file_name.to_string(), file_size);
     } else {
         watched_file_states.insert(abs_file_name.to_string(), initial_file_position);
-        handle_file_event(initial_file_position, file_size, abs_file_name);
+        handle_file_event(initial_file_position, file_size, abs_file_name, last_file);
     }
 }
 
@@ -326,7 +322,12 @@ fn watch_file(kqueue_watcher: &mut Watcher, file: &Path) {
 
 
 /// Handle action triggered by an event
-fn handle_file_event(file_position: u64, file_size: u64, file_path: &str) {
+fn handle_file_event(
+    file_position: u64,
+    file_size: u64,
+    file_path: &str,
+    last_file: &mut String,
+) {
     let watched_file = file_path.to_string();
     {
         debug!(
@@ -343,7 +344,7 @@ fn handle_file_event(file_position: u64, file_size: u64, file_path: &str) {
         );
 
         // print header only when file is at beginning and not often than N bytes after previous one (limits header spam)
-        if file_position == 0 || *LAST_FILE.lock().unwrap() != watched_file {
+        if file_position == 0 || *last_file != watched_file {
             println!();
             println!(); // just start new entry after \n\n
             info!(
@@ -360,7 +361,7 @@ fn handle_file_event(file_position: u64, file_size: u64, file_path: &str) {
         }
     }
 
-    *LAST_FILE.lock().unwrap() = watched_file;
+    *last_file = watched_file;
 }
 
 

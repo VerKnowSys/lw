@@ -22,7 +22,7 @@ chrono = "0.4.19"
 kqueue2 = "0.2.2"
 kqueue2-sys = "0.1.5"
 mimalloc = "0.1.24"
-lazy_static = "1.4.0"
+# lazy_static = "1.4.0"
 
 
 # The release profile, used for `cargo build --release`.
