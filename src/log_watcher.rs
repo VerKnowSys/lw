@@ -163,47 +163,16 @@ fn main() {
                 Filename(_file_descriptor, abs_file_name) => {
                     let file_path = Path::new(&abs_file_name);
                     match metadata(file_path) {
-                        Ok(metadata) => {
-                            if metadata.is_dir() {
+                        Ok(file_metadata) => {
+                            if file_metadata.is_dir() {
                                 trace!("{}: {}", "+DirLoad".magenta(), abs_file_name.cyan());
                                 walkdir_recursive(&mut kqueue_watcher, file_path);
                             } else {
-                                let file_size = metadata.len();
-                                let initial_file_position = if (file_size as i64)
-                                    - (TAIL_BYTES as i64)
-                                    > 0
-                                    && !watched_file_states.contains_key(&abs_file_name)
-                                {
-                                    file_size - TAIL_BYTES
-                                } else {
-                                    watched_file_states.get(&abs_file_name).unwrap_or(&0) - 0
-                                };
-
-                                if watched_file_states.contains_key(&abs_file_name) {
-                                    let current_position = watched_file_states
-                                        .get(&abs_file_name)
-                                        .unwrap_or(&initial_file_position)
-                                        - 0;
-                                    handle_file_event(
-                                        current_position,
-                                        file_size,
-                                        &abs_file_name,
-                                    );
-                                    let _removed = watched_file_states
-                                        .remove(&abs_file_name)
-                                        .unwrap_or_default();
-                                    watched_file_states
-                                        .insert(abs_file_name.clone(), file_size);
-                                } else {
-                                    watched_file_states
-                                        .insert(abs_file_name.clone(), initial_file_position);
-                                    handle_file_event(
-                                        initial_file_position,
-                                        file_size,
-                                        &abs_file_name,
-                                    );
-                                }
-                                break;
+                                calculate_position_and_handle(
+                                    file_metadata.len(),
+                                    &mut watched_file_states,
+                                    &abs_file_name,
+                                );
                             }
                         }
 
@@ -257,6 +226,34 @@ fn main() {
                 event => warn!("Unknown event: {}", format!("{:?}", event).cyan()),
             }
         }
+    }
+}
+
+
+/// Process file position
+fn calculate_position_and_handle(
+    file_size: u64,
+    watched_file_states: &mut FileAndPosition,
+    abs_file_name: &str,
+) {
+    let initial_file_position =
+        if file_size + 1 > TAIL_BYTES && !watched_file_states.contains_key(abs_file_name) {
+            file_size - TAIL_BYTES
+        } else {
+            *watched_file_states.get(abs_file_name).unwrap_or(&0)
+        };
+    if watched_file_states.contains_key(abs_file_name) {
+        let current_position = *watched_file_states
+            .get(abs_file_name)
+            .unwrap_or(&initial_file_position);
+        handle_file_event(current_position, file_size, abs_file_name);
+        let _removed = watched_file_states
+            .remove(abs_file_name)
+            .unwrap_or_default();
+        watched_file_states.insert(abs_file_name.to_string(), file_size);
+    } else {
+        watched_file_states.insert(abs_file_name.to_string(), initial_file_position);
+        handle_file_event(initial_file_position, file_size, abs_file_name);
     }
 }
 
