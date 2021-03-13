@@ -115,6 +115,10 @@ fn main() {
         Ok(_) => LevelFilter::Debug,
         Err(_) => LevelFilter::Info,
     };
+    let loglevel = match env::var("TRACE") {
+        Ok(_) => LevelFilter::Trace,
+        Err(_) => loglevel,
+    };
 
     // Dispatch logger:
     Dispatch::new()
@@ -126,13 +130,11 @@ fn main() {
             ))
         })
         .level(loglevel)
-        .chain(File::open(STDOUT_DEV).unwrap_or_else(|_| {
-            fatal(format!(
-                "{}: Couldn't open: {}! Something is terribly wrong here!",
-                "FATAL ERROR".red(),
-                STDOUT_DEV.yellow()
-            ))
-        }))
+        .chain(File::open(STDOUT_DEV).expect(&format!(
+            "{}: Couldn't open: {}!",
+            "FATAL ERROR".red(),
+            STDOUT_DEV.cyan()
+        )))
         .apply()
         .expect("Couldn't initialize Fern logger!");
 
@@ -140,8 +142,7 @@ fn main() {
     let mut watched_file_states = FileAndPosition::new();
 
     // mutable kqueue watcher:
-    let mut kqueue_watcher = Watcher::new()
-        .unwrap_or_else(|e| fatal(format!("Could not create kq watcher: {}", e)));
+    let mut kqueue_watcher = Watcher::new().expect("Could not create kq watcher!");
 
     // read paths given as arguments:
     let paths_to_watch: Vec<String> = env::args()
@@ -150,9 +151,8 @@ fn main() {
 
     debug!("Watching paths: {}", paths_to_watch.join(", "));
     if paths_to_watch.is_empty() {
-        fatal(
-            "No paths specified as arguments! You have to specify at least a single directory/file to watch!",
-        );
+        error!("FATAL ERROR: {}", "No paths specified as arguments! You have to specify at least a single directory/file to watch!".red());
+        exit(1)
     }
 
     // initial watches for specified dirs/files:
@@ -163,9 +163,14 @@ fn main() {
 
     // handle events dynamically, including new files
     loop {
-        debug!("+Trigger: watch()");
+        trace!("{}: watch()", "+Trigger".magenta());
         kqueue_watcher.watch().unwrap_or_default();
         while let Some(an_event) = kqueue_watcher.iter().next() {
+            debug!("Watched files: {}", watched_file_states.iter().count());
+            debug!(
+                "Watched files list: [{}]",
+                format!("{:?}", watched_file_states).cyan()
+            );
             match an_event.ident {
                 Filename(_file_descriptor, abs_file_name) => {
                     let file_path = Path::new(&abs_file_name);
@@ -173,7 +178,7 @@ fn main() {
                         Ok(metadata) => {
                             if metadata.is_dir() {
                                 // handle dirs
-                                debug!("{}: {}", "+DirLoad".magenta(), abs_file_name.cyan());
+                                trace!("{}: {}", "+DirLoad".magenta(), abs_file_name.cyan());
                                 walkdir_recursive(&mut kqueue_watcher, file_path);
                             } else {
                                 // handle files
@@ -187,7 +192,7 @@ fn main() {
                             // handle situation when logs are wiped out and unavailable to read anymore
                             kqueue_watcher
                                 .remove_filename(file_path, EventFilter::EVFILT_VNODE)
-                                .map(|e| {debug!("{}: {}", "-Watch".magenta(), abs_file_name.cyan()); e})
+                                .map(|e| {trace!("{}: {}", "-Watch".magenta(), abs_file_name.cyan()); e})
                                 .unwrap_or_else(|error| {
                                     error!(
                                         "Could not remove watch on file: {:?}. Error cause: {}",
@@ -198,7 +203,7 @@ fn main() {
                             // try to build list if path exists
                             if file_path.exists() {
                                 if file_path.is_dir() {
-                                    debug!(
+                                    trace!(
                                         "{}: {}",
                                         "+DirLoad".magenta(),
                                         abs_file_name.cyan()
@@ -208,19 +213,26 @@ fn main() {
                                     watch_file(&mut kqueue_watcher, file_path);
                                 }
                             } else {
-                                error!(
-                                    "Dropped watch on file/dir: {}. Error cause: {}",
-                                    format!("{:?}", &file_path).red(),
+                                debug!(
+                                    "Dropped watch on file/dir: {}. Last value: {}. Error cause: {}",
+                                    format!("{:?}", &file_path).cyan(),
+                                    format!(
+                                        "{}",
+                                        watched_file_states
+                                            .remove(&abs_file_name)
+                                            .unwrap_or_default()
+                                    )
+                                    .cyan(),
                                     format!("{}", &error_cause).red()
                                 );
                             }
                         }
                     };
-                    debug!("+Trigger: watch()");
+                    trace!("{}: watch()", "+Trigger".magenta());
                     kqueue_watcher.watch().unwrap_or_default();
                 }
 
-                event => warn!("Unknown event: {:?}", event),
+                event => warn!("Unknown event: {}", format!("{:?}", event).cyan()),
             }
         }
     }
@@ -241,7 +253,7 @@ fn watch_file(kqueue_watcher: &mut Watcher, file: &Path) {
     kqueue_watcher
         .remove_filename(file, EventFilter::EVFILT_VNODE)
         .map(|e| {
-            debug!("{}: {:?}", "-Watch".magenta(), file);
+            trace!("{}: {}", "-Watch".magenta(), format!("{:?}", file).cyan());
             e
         })
         .unwrap_or_default();
@@ -258,13 +270,13 @@ fn watch_file(kqueue_watcher: &mut Watcher, file: &Path) {
                 | NOTE_REVOKE,
         )
         .map(|e| {
-            debug!("{}: {}", "+Watch".magenta(), format!("{:?}", file).cyan());
+            trace!("{}: {}", "+Watch".magenta(), format!("{:?}", file).cyan());
             e
         })
         .unwrap_or_else(|error_cause| {
             error!(
-                "Could not watch file {:?}. Error cause: {}",
-                file,
+                "Could not watch file: {}. Caused by: {}",
+                format!("{:?}", file).cyan(),
                 error_cause.to_string().red()
             )
         });
@@ -277,6 +289,12 @@ fn handle_file_event(states: &mut FileAndPosition, file_path: &str) {
     let file_position = states.entry(watched_file.clone()).or_insert(0);
     {
         debug!(
+            "Watched file position: {}, file size: {}, file name: {}",
+            file_position,
+            file_size,
+            watched_file.cyan()
+        );
+        trace!(
             "{}: {} {}",
             "+EventHandle".magenta(),
             watched_file.cyan(),
@@ -315,12 +333,13 @@ fn seek_file_to_position_and_read(file_to_watch: &str, file_position: u64) -> Ve
                 .seek(SeekFrom::Start(file_position))
                 .unwrap_or_else(|_| 0);
             cursor.lines().filter_map(|line| line.ok()).collect()
+            trace!("Lines out: '{}'", format!("{:?}", lines_out).cyan());
         }
 
         Err(error_cause) => {
             error!(
-                "Couldn't open file: {}. Error cause: {}",
-                file_to_watch.yellow(),
+                "Couldn't open file: {}. Caused by: {}",
+                file_to_watch.cyan(),
                 error_cause.to_string().red()
             );
             vec![]
