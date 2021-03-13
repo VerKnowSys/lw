@@ -212,13 +212,13 @@ fn main() {
                                     walkdir_recursive(&mut kqueue_watcher, file_path);
                                 } else if file_path.is_file() {
                                     watch_file(&mut kqueue_watcher, file_path);
-                                } else {
-                                    error!(
-                                        "Dropped watch on file/dir: {}. Error cause: {}",
-                                        format!("{:?}", &file_path).red(),
-                                        format!("{}", &error_cause).red()
-                                    );
                                 }
+                            } else {
+                                error!(
+                                    "Dropped watch on file/dir: {}. Error cause: {}",
+                                    format!("{:?}", &file_path).red(),
+                                    format!("{}", &error_cause).red()
+                                );
                             }
                         }
                     };
