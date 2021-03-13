@@ -98,9 +98,7 @@ fn walkdir_recursive(mut kqueue_watcher: &mut Watcher, file_path: &Path) {
         .max_depth(MAX_DIR_DEPTH)
         .into_iter()
         .filter_map(|element| element.ok())
-        .for_each(|element| {
-            watch_file(&mut kqueue_watcher, element.path());
-        });
+        .for_each(|element| watch_file(&mut kqueue_watcher, element.path()));
 }
 
 
@@ -161,10 +159,6 @@ fn main() {
         watch_the_watcher(&mut kqueue_watcher);
         while let Some(an_event) = kqueue_watcher.iter().next() {
             debug!("Watched files: {}", watched_file_states.iter().count());
-            debug!(
-                "Watched files list: [{}]",
-                format!("{:?}", watched_file_states).cyan()
-            );
             match an_event.ident {
                 Filename(_file_descriptor, abs_file_name) => {
                     let file_path = Path::new(&abs_file_name);
@@ -253,6 +247,10 @@ fn main() {
                             }
                         }
                     };
+                    debug!(
+                        "Watched files list: [{}]",
+                        format!("{:?}", watched_file_states).cyan()
+                    );
                     watch_the_watcher(&mut kqueue_watcher);
                 }
 
