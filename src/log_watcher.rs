@@ -45,6 +45,7 @@ static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 #[macro_use]
 extern crate log;
 
+use config::Config;
 use kqueue2::{Ident::*, *};
 use std::{
     collections::HashMap,
@@ -58,33 +59,24 @@ use std::{
 use chrono::Local;
 use colored::Colorize;
 use fern::Dispatch;
-use log::LevelFilter;
 use walkdir::WalkDir;
+
+
+mod config;
 
 
 /// FileAndPosition alias type for HashMap of File path and file cursor position (in bytes)
 type FileAndPosition = HashMap<String, u64>;
 
-/// Defines stdout file
-const STDOUT_DEV: &str = "/dev/stdout";
-
-/// Maximum directory depth to watch
-const MAX_DIR_DEPTH: usize = 5;
-
-/// Maximum watched files
-const MAX_OPEN_FILES: usize = 1023;
-
-/// Read tail of this length from large files
-const TAIL_BYTES: u64 = 2048;
-
 
 /// Resursively filter out all unreadable/unaccessible/inproper and handle proper files
 fn walkdir_recursive(mut kqueue_watcher: &mut Watcher, file_path: &Path) {
+    let config = Config::load();
     WalkDir::new(&file_path)
-        .follow_links(true)
         .contents_first(true)
-        .max_open(MAX_OPEN_FILES)
-        .max_depth(MAX_DIR_DEPTH)
+        .follow_links(config.follow_links.unwrap_or_default())
+        .max_open(config.max_open_files.unwrap_or_default())
+        .max_depth(config.max_dir_depth.unwrap_or_default())
         .into_iter()
         .filter_map(|element| element.ok())
         .for_each(|element| watch_file(&mut kqueue_watcher, element.path()));
@@ -92,35 +84,14 @@ fn walkdir_recursive(mut kqueue_watcher: &mut Watcher, file_path: &Path) {
 
 
 fn main() {
-    // Read value of DEBUG from env, if defined switch log level to Debug:
-    let loglevel = match env::var("DEBUG") {
-        Ok(_) => LevelFilter::Debug,
-        Err(_) => LevelFilter::Info,
-    };
-    let loglevel = match env::var("TRACE") {
-        Ok(_) => LevelFilter::Trace,
-        Err(_) => loglevel,
-    };
+    let config = Config::load();
+    let log_level = config.get_log_level();
+    let output = config.output.clone().unwrap_or_default();
 
-    // Dispatch logger:
-    Dispatch::new()
-        .format(move |out, message, _record| {
-            out.finish(format_args!(
-                "{}: {}",
-                Local::now().to_rfc3339().black(),
-                message
-            ))
-        })
-        .level(loglevel)
-        .chain(File::open(STDOUT_DEV).unwrap_or_else(|_| {
-            panic!(
-                "{}: Couldn't open: {}!",
-                "FATAL ERROR".red(),
-                STDOUT_DEV.cyan()
-            )
-        }))
-        .apply()
-        .expect("Couldn't initialize Fern logger!");
+    // read paths given as arguments:
+    let paths_to_watch: Vec<String> = env::args()
+        .skip(1) // first arg is $0
+        .collect();
 
     // mutable hashmap keeping position of all watched files:
     let mut watched_file_states = FileAndPosition::new();
@@ -131,10 +102,21 @@ fn main() {
     // name of the last logged file:
     let mut last_file = String::new();
 
-    // read paths given as arguments:
-    let paths_to_watch: Vec<String> = env::args()
-        .skip(1) // first arg is $0
-        .collect();
+    // Dispatch logger:
+    Dispatch::new()
+        .format(|out, message, _record| {
+            out.finish(format_args!(
+                "{}: {}",
+                Local::now().to_rfc3339().black(),
+                message
+            ))
+        })
+        .level(log_level)
+        .chain(File::open(output.clone()).unwrap_or_else(|_| {
+            panic!("{}: Couldn't open: {}!", "FATAL ERROR".red(), output.cyan())
+        }))
+        .apply()
+        .expect("Couldn't initialize Fern logger!");
 
     debug!("Watching paths: {}", paths_to_watch.join(", "));
     if paths_to_watch.is_empty() {
@@ -161,6 +143,7 @@ fn main() {
                         &mut watched_file_states,
                         &mut last_file,
                     );
+                    // handle_config_changes(&mut log_level);
                     watch_the_watcher(&mut kqueue_watcher);
                 }
 
@@ -169,6 +152,16 @@ fn main() {
         }
     }
 }
+
+
+// /// Hot reload configuration
+// fn _handle_config_changes(log_level: &mut LevelFilter) {
+//     let level = Config::load().get_log_level();
+//     if level != *log_level {
+//         info!("Changing log level to: {}", format!("{:?}", level).cyan());
+//         *log_level = level
+//     }
+// }
 
 
 /// Process file with event
@@ -248,9 +241,11 @@ fn calculate_position_and_handle(
     abs_file_name: &str,
     last_file: &mut String,
 ) {
+    let config = Config::load();
+    let tail_bytes = config.tail_bytes.unwrap_or_default();
     let initial_file_position =
-        if file_size + 1 > TAIL_BYTES && !watched_file_states.contains_key(abs_file_name) {
-            file_size - TAIL_BYTES
+        if file_size + 1 > tail_bytes && !watched_file_states.contains_key(abs_file_name) {
+            file_size - tail_bytes
         } else {
             *watched_file_states.get(abs_file_name).unwrap_or(&0)
         };

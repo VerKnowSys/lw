@@ -21,7 +21,8 @@ walkdir = "2.3.1"
 chrono = "0.4.19"
 kqueue2 = "0.2.2"
 kqueue2-sys = "0.1.5"
-mimalloc = "0.1.24"
+mimalloc = "0.1.25"
+nanoserde = "0.1.22"
 # lazy_static = "1.4.0"
 
 
