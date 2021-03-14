@@ -92,7 +92,7 @@ impl Config {
             "/Services/Lw/service.conf",
             "lw.conf",
         ];
-        let config: String = config_paths
+        let mut config: String = config_paths
             .iter()
             .filter(|file| Path::new(file).exists())
             .take(1)
@@ -104,9 +104,9 @@ impl Config {
             write_append(
                 first_conf,
                 &format!("{}\n", SerRon::serialize_ron(&new_conf)),
-            )
+            );
+            config = first_conf.to_string();
         }
-        debug!("Reading config: {}", config.cyan());
         read_to_string(&config)
             .and_then(|file_contents| {
                 DeRon::deserialize_ron(&*file_contents).map_err(|err| {
