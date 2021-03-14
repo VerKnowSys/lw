@@ -70,8 +70,7 @@ type FileAndPosition = HashMap<String, u64>;
 
 
 /// Resursively filter out all unreadable/unaccessible/inproper and handle proper files
-fn walkdir_recursive(mut kqueue_watcher: &mut Watcher, file_path: &Path) {
-    let config = Config::load();
+fn walkdir_recursive(mut kqueue_watcher: &mut Watcher, file_path: &Path, config: &Config) {
     WalkDir::new(&file_path)
         .contents_first(true)
         .follow_links(config.follow_links.unwrap_or_default())
@@ -127,7 +126,7 @@ fn main() {
     // initial watches for specified dirs/files:
     paths_to_watch.into_iter().for_each(|a_path| {
         // Handle case when given a file as argument
-        walkdir_recursive(&mut kqueue_watcher, &Path::new(&a_path));
+        walkdir_recursive(&mut kqueue_watcher, &Path::new(&a_path), &config);
     });
 
     // handle events dynamically, including new files
@@ -142,6 +141,7 @@ fn main() {
                         &mut kqueue_watcher,
                         &mut watched_file_states,
                         &mut last_file,
+                        &config,
                     );
                     // handle_config_changes(&mut log_level);
                     watch_the_watcher(&mut kqueue_watcher);
@@ -170,13 +170,14 @@ fn process_file_event(
     kqueue_watcher: &mut Watcher,
     watched_file_states: &mut FileAndPosition,
     last_file: &mut String,
+    config: &Config,
 ) {
     let file_path = Path::new(&abs_file_name);
     match metadata(file_path) {
         Ok(file_metadata) => {
             if file_metadata.is_dir() {
                 trace!("{}: {}", "+DirLoad".magenta(), abs_file_name.cyan());
-                walkdir_recursive(kqueue_watcher, file_path);
+                walkdir_recursive(kqueue_watcher, file_path, config);
             } else {
                 trace!("{}: {}", "+FileWatchHandle".magenta(), abs_file_name.cyan());
                 calculate_position_and_handle(
@@ -184,6 +185,7 @@ fn process_file_event(
                     watched_file_states,
                     &abs_file_name,
                     last_file,
+                    &config,
                 );
             }
         }
@@ -207,7 +209,7 @@ fn process_file_event(
             if file_path.exists() {
                 if file_path.is_dir() {
                     trace!("{}: {}", "+DirLoad".magenta(), abs_file_name.cyan());
-                    walkdir_recursive(kqueue_watcher, file_path);
+                    walkdir_recursive(kqueue_watcher, file_path, config);
                 } else if file_path.is_file() {
                     watch_file(kqueue_watcher, file_path);
                 }
@@ -240,8 +242,8 @@ fn calculate_position_and_handle(
     watched_file_states: &mut FileAndPosition,
     abs_file_name: &str,
     last_file: &mut String,
+    config: &Config,
 ) {
-    let config = Config::load();
     let tail_bytes = config.tail_bytes.unwrap_or_default();
     let initial_file_position =
         if file_size + 1 > tail_bytes && !watched_file_states.contains_key(abs_file_name) {
