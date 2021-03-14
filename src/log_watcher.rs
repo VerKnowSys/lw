@@ -72,6 +72,7 @@ type FileAndPosition = HashMap<String, u64>;
 /// Resursively filter out all unreadable/unaccessible/inproper and handle proper files
 fn walkdir_recursive(mut kqueue_watcher: &mut Watcher, file_path: &Path, config: &Config) {
     WalkDir::new(&file_path)
+        .same_file_system(false)
         .contents_first(true)
         .follow_links(config.follow_links.unwrap_or_default())
         .max_open(config.max_open_files.unwrap_or_default())
