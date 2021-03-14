@@ -86,27 +86,7 @@ pub fn write_append(file_path: &str, contents: &str) {
 impl Config {
     /// Load Krecik configuration file
     pub fn load() -> Config {
-        let config_paths = [
-            &format!("{}/.lw.conf", env::var("HOME").unwrap_or_default()),
-            &format!("{}/.config/lw.conf", env::var("HOME").unwrap_or_default()),
-            "/Services/Lw/service.conf",
-            "lw.conf",
-        ];
-        let mut config: String = config_paths
-            .iter()
-            .filter(|file| Path::new(file).exists())
-            .take(1)
-            .cloned()
-            .collect();
-        if config.is_empty() {
-            let first_conf = config_paths[0];
-            let new_conf = Config::default();
-            write_append(
-                first_conf,
-                &format!("{}\n", SerRon::serialize_ron(&new_conf)),
-            );
-            config = first_conf.to_string();
-        }
+        let config = Config::get_or_create();
         read_to_string(&config)
             .and_then(|file_contents| {
                 DeRon::deserialize_ron(&*file_contents).map_err(|err| {
@@ -120,6 +100,33 @@ impl Config {
                 })
             })
             .unwrap_or_default()
+    }
+
+
+    /// Return path of the config
+    pub fn get_or_create() -> String {
+        let config_paths = [
+            &format!("{}/.lw.conf", env::var("HOME").unwrap_or_default()),
+            &format!("{}/.config/lw.conf", env::var("HOME").unwrap_or_default()),
+            "lw.conf",
+        ];
+        let config: String = config_paths
+            .iter()
+            .filter(|file| Path::new(file).exists())
+            .take(1)
+            .cloned()
+            .collect();
+        if config.is_empty() {
+            let first_conf = config_paths[0].to_string();
+            let new_conf = Config::default();
+            write_append(
+                &first_conf,
+                &format!("{}\n", SerRon::serialize_ron(&new_conf)),
+            );
+            first_conf
+        } else {
+            config
+        }
     }
 
 
