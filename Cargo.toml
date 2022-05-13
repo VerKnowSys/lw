@@ -1,6 +1,6 @@
 [package]
 name = "lw"
-version = "0.6.7"
+version = "0.6.8"
 authors = ["Daniel (dmilith) Dettlaff <dmilith@me.com>"]
 description = "Log-Watcher utility - replacement for: `tail -F /some/path/*` - that uses Kqueue to watch for new files as well…"
 keywords = ["kqueue", "log", "watch", "tail", "view"]
