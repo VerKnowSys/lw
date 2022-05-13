@@ -125,14 +125,8 @@ impl Config {
             let new_conf = Config::default();
             write_append(
                 &first_conf,
-                &format!(
-                    "{}\n",
-                    to_string_pretty(
-                        &new_conf,
-                        PrettyConfig::new().new_line("\n".to_string()),
-                    )
-                    .unwrap_or_default()
-                ),
+                &to_string_pretty(&new_conf, PrettyConfig::new().new_line("\n".to_string()))
+                    .unwrap_or_default(),
             );
             first_conf
         } else {
