@@ -70,7 +70,7 @@ type FileAndPosition = HashMap<String, u64>;
 
 
 /// Resursively filter out all unreadable/unaccessible/inproper and handle proper files
-fn walkdir_recursive(mut kqueue_watcher: &mut Watcher, file_path: &Path, config: &Config) {
+fn walkdir_recursive(kqueue_watcher: &mut Watcher, file_path: &Path, config: &Config) {
     WalkDir::new(&file_path)
         .same_file_system(false)
         .contents_first(true)
@@ -79,7 +79,7 @@ fn walkdir_recursive(mut kqueue_watcher: &mut Watcher, file_path: &Path, config:
         .max_depth(config.max_dir_depth.unwrap_or_default())
         .into_iter()
         .filter_map(|element| element.ok())
-        .for_each(|element| watch_file(&mut kqueue_watcher, element.path()));
+        .for_each(|element| watch_file(kqueue_watcher, element.path()));
 }
 
 
@@ -127,14 +127,14 @@ fn main() {
     // initial watches for specified dirs/files:
     paths_to_watch.into_iter().for_each(|a_path| {
         // Handle case when given a file as argument
-        walkdir_recursive(&mut kqueue_watcher, &Path::new(&a_path), &config);
+        walkdir_recursive(&mut kqueue_watcher, Path::new(&a_path), &config);
     });
 
     // handle events dynamically, including new files
     loop {
         watch_the_watcher(&mut kqueue_watcher);
         while let Some(an_event) = kqueue_watcher.iter().next() {
-            debug!("Watched files: {}", watched_file_states.iter().count());
+            debug!("Watched files: {}", watched_file_states.len());
             match an_event.ident {
                 Filename(_file_descriptor, abs_file_name) => {
                     process_file_event(
@@ -184,9 +184,9 @@ fn process_file_event(
                 calculate_position_and_handle(
                     file_metadata.len(),
                     watched_file_states,
-                    &abs_file_name,
+                    abs_file_name,
                     last_file,
-                    &config,
+                    config,
                 );
             }
         }

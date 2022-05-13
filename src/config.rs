@@ -63,8 +63,11 @@ impl Default for Config {
 /// Write-once-and-atomic to a file
 pub fn write_append(file_path: &str, contents: &str) {
     if !contents.is_empty() {
-        let mut options = OpenOptions::new();
-        match options.create(true).append(true).open(&file_path) {
+        match OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&file_path)
+        {
             Ok(mut file) => {
                 file.write_all(contents.as_bytes()).unwrap_or_else(|_| {
                     panic!("Access denied? File can't be written: {}", &file_path)
@@ -122,7 +125,14 @@ impl Config {
             let new_conf = Config::default();
             write_append(
                 &first_conf,
-                &format!("{}\n", SerRon::serialize_ron(&new_conf)),
+                &format!(
+                    "{}\n",
+                    to_string_pretty(
+                        &new_conf,
+                        PrettyConfig::new().new_line("\n".to_string()),
+                    )
+                    .unwrap_or_default()
+                ),
             );
             first_conf
         } else {
