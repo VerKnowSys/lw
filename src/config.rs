@@ -7,7 +7,8 @@ use std::{
 
 use colored::Colorize;
 use log::LevelFilter;
-use nanoserde::{DeRon, SerRon};
+use ron::ser::{to_string_pretty, PrettyConfig};
+use serde::{Deserialize, Serialize};
 
 
 /// Defines stdout file
@@ -23,7 +24,7 @@ const MAX_OPEN_FILES: usize = 1023;
 const TAIL_BYTES: u64 = 2048;
 
 
-#[derive(Clone, Debug, DeRon, SerRon)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Config {
     /// Print output. Default is /dev/stdout
     pub output: Option<String>,
@@ -89,7 +90,7 @@ impl Config {
         let config = Config::get_or_create();
         read_to_string(&config)
             .and_then(|file_contents| {
-                DeRon::deserialize_ron(&*file_contents).map_err(|err| {
+                ron::from_str(&*file_contents).map_err(|err| {
                     let config_error = Error::new(ErrorKind::InvalidInput, err.to_string());
                     error!(
                         "Configuration error: {} in file: {}",
