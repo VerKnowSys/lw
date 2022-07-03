@@ -1,13 +1,13 @@
 [package]
 name = "lw"
-version = "0.6.9"
+version = "0.6.10"
 authors = ["Daniel (dmilith) Dettlaff <dmilith@me.com>"]
 description = "Log-Watcher utility - replacement for: `tail -F /some/path/*` - that uses Kqueue to watch for new files as well…"
 keywords = ["kqueue", "log", "watch", "tail", "view"]
 categories = ["filesystem"]
 homepage = "https://github.com/VerKnowSys/lw"
 license = "MIT"
-edition = "2018"
+edition = "2021"
 
 [[bin]]
 name = "lw"
@@ -22,8 +22,8 @@ chrono = "0.4.19"
 kqueue2 = "0.2.2"
 kqueue2-sys = "0.1.5"
 mimalloc = "0.1.29"
-serde = {version = "1.0.137", features = ["derive"]}
-ron = "0.7.0"
+serde = { version = "1.0.138", features = ["derive"] }
+ron = "0.7.1"
 
 
 # The release profile, used for `cargo build --release`.
