@@ -54,11 +54,13 @@ use std::{
     io::{prelude::*, BufReader, SeekFrom},
     path::Path,
     process::exit,
+    thread,
 };
 
 use chrono::Local;
 use colored::Colorize;
 use fern::Dispatch;
+use std::time::Duration;
 use walkdir::WalkDir;
 
 
@@ -151,6 +153,9 @@ fn main() {
                 event => warn!("Unknown event: {}", format!("{:?}", event).cyan()),
             }
         }
+
+        // throttle 100ms
+        thread::sleep(Duration::from_millis(100));
     }
 }
 
