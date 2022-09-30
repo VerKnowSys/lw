@@ -1,4 +1,3 @@
 /target
 **/*.rs.bk
-*.lock
 *.sublime-workspace
