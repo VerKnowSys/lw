@@ -1,7 +1,11 @@
+//! Configuration model and loading (RON-backed, with sane defaults).
+
+use crate::consts::{DEFAULT_IGNORE_PATTERNS, MAX_DIR_DEPTH, MAX_OPEN_FILES, STDOUT_DEV, TAIL_BYTES};
+use crate::utils::write_append;
 use std::{
     env,
-    fs::{read_to_string, OpenOptions},
-    io::{Error, ErrorKind, Write},
+    fs::read_to_string,
+    io::{Error, ErrorKind},
     path::Path,
 };
 
@@ -11,19 +15,7 @@ use ron::ser::{to_string_pretty, PrettyConfig};
 use serde::{Deserialize, Serialize};
 
 
-/// Defines stdout file
-const STDOUT_DEV: &str = "/dev/stdout";
-
-/// Maximum directory depth to watch
-const MAX_DIR_DEPTH: usize = 5;
-
-/// Maximum watched files
-const MAX_OPEN_FILES: usize = 1023;
-
-/// Read tail of this length from large files
-const TAIL_BYTES: u64 = 2048;
-
-
+/// Runtime configuration for the log watcher.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Config {
     /// Print output. Default is /dev/stdout
@@ -43,6 +35,23 @@ pub struct Config {
 
     /// How deep to go in directory tree
     pub max_dir_depth: Option<usize>,
+
+    /// Filename glob patterns to ignore (transient temp/swap/backup files).
+    /// Missing from older config files -> falls back to the built-in defaults.
+    #[serde(default = "default_ignore_patterns")]
+    pub ignore_patterns: Option<Vec<String>>,
+}
+
+
+/// Serde fallback for [`Config::ignore_patterns`] so config files written
+/// before this option existed still deserialize with sensible defaults.
+fn default_ignore_patterns() -> Option<Vec<String>> {
+    Some(
+        DEFAULT_IGNORE_PATTERNS
+            .iter()
+            .map(|pattern| pattern.to_string())
+            .collect(),
+    )
 }
 
 
@@ -55,33 +64,7 @@ impl Default for Config {
             tail_bytes: Some(TAIL_BYTES),
             max_dir_depth: Some(MAX_DIR_DEPTH),
             follow_links: Some(true),
-        }
-    }
-}
-
-
-/// Write-once-and-atomic to a file
-pub fn write_append(file_path: &str, contents: &str) {
-    if !contents.is_empty() {
-        match OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(&file_path)
-        {
-            Ok(mut file) => {
-                file.write_all(contents.as_bytes()).unwrap_or_else(|_| {
-                    panic!("Access denied? File can't be written: {}", &file_path)
-                });
-                debug!("Atomically written data to file: {}", &file_path);
-            }
-
-            Err(err) => {
-                error!(
-                    "Atomic write to: {} has failed! Cause: {}",
-                    &file_path,
-                    err.to_string()
-                )
-            }
+            ignore_patterns: default_ignore_patterns(),
         }
     }
 }
@@ -114,24 +97,22 @@ impl Config {
             &format!("{}/.config/lw.conf", env::var("HOME").unwrap_or_default()),
             "lw.conf",
         ];
-        let config: String = config_paths
+        config_paths
             .iter()
-            .filter(|file| Path::new(file).exists())
-            .take(1)
-            .cloned()
-            .collect();
-        if config.is_empty() {
-            let first_conf = config_paths[0].to_string();
-            let new_conf = Config::default();
-            write_append(
-                &first_conf,
-                &to_string_pretty(&new_conf, PrettyConfig::new().new_line("\n".to_string()))
+            .find(|file| Path::new(file).exists())
+            .map(|found| found.to_string())
+            .unwrap_or_else(|| {
+                let first_conf = config_paths[0].to_string();
+                write_append(
+                    &first_conf,
+                    &to_string_pretty(
+                        &Config::default(),
+                        PrettyConfig::new().new_line("\n".to_string()),
+                    )
                     .unwrap_or_default(),
-            );
-            first_conf
-        } else {
-            config
-        }
+                );
+                first_conf
+            })
     }
 
 
