@@ -1,6 +1,8 @@
 //! Configuration model and loading (RON-backed, with sane defaults).
 
-use crate::consts::{DEFAULT_IGNORE_PATTERNS, MAX_DIR_DEPTH, MAX_OPEN_FILES, STDOUT_DEV, TAIL_BYTES};
+use crate::consts::{
+    DEFAULT_IGNORE_PATTERNS, DEFAULT_THEME, MAX_DIR_DEPTH, MAX_OPEN_FILES, STDOUT_DEV, TAIL_BYTES,
+};
 use crate::utils::write_append;
 use std::{
     env,
@@ -11,7 +13,7 @@ use std::{
 
 use colored::Colorize;
 use log::LevelFilter;
-use ron::ser::{to_string_pretty, PrettyConfig};
+use ron::ser::{PrettyConfig, to_string_pretty};
 use serde::{Deserialize, Serialize};
 
 
@@ -40,6 +42,11 @@ pub struct Config {
     /// Missing from older config files -> falls back to the built-in defaults.
     #[serde(default = "default_ignore_patterns")]
     pub ignore_patterns: Option<Vec<String>>,
+
+    /// syntect theme name for syntax-highlighted output (e.g.
+    /// "base16-ocean.dark", "Solarized (dark)", "InspiredGitHub").
+    #[serde(default = "default_theme")]
+    pub theme: Option<String>,
 }
 
 
@@ -55,6 +62,13 @@ fn default_ignore_patterns() -> Option<Vec<String>> {
 }
 
 
+/// Serde fallback for [`Config::theme`] so config files written before this
+/// option existed still deserialize with the default theme.
+fn default_theme() -> Option<String> {
+    Some(DEFAULT_THEME.to_string())
+}
+
+
 impl Default for Config {
     fn default() -> Self {
         Config {
@@ -65,6 +79,7 @@ impl Default for Config {
             max_dir_depth: Some(MAX_DIR_DEPTH),
             follow_links: Some(true),
             ignore_patterns: default_ignore_patterns(),
+            theme: default_theme(),
         }
     }
 }
@@ -90,29 +105,43 @@ impl Config {
     }
 
 
-    /// Return path of the config
+    /// Candidate configuration file paths, in priority order.
+    fn config_paths() -> [String; 3] {
+        let home = env::var("HOME").unwrap_or_default();
+        [
+            format!("{home}/.lw.conf"),
+            format!("{home}/.config/lw.conf"),
+            String::from("lw.conf"),
+        ]
+    }
+
+    /// Path of the first existing configuration file, if any.
+    pub fn existing_config_path() -> Option<String> {
+        Self::config_paths()
+            .into_iter()
+            .find(|path| Path::new(path).exists())
+    }
+
+    /// Path where a default configuration file is written when none exists.
+    pub fn default_config_path() -> String {
+        let [first, ..] = Self::config_paths();
+        first
+    }
+
+    /// Return path of the config, writing a default one if none exists yet.
     pub fn get_or_create() -> String {
-        let config_paths = [
-            &format!("{}/.lw.conf", env::var("HOME").unwrap_or_default()),
-            &format!("{}/.config/lw.conf", env::var("HOME").unwrap_or_default()),
-            "lw.conf",
-        ];
-        config_paths
-            .iter()
-            .find(|file| Path::new(file).exists())
-            .map(|found| found.to_string())
-            .unwrap_or_else(|| {
-                let first_conf = config_paths[0].to_string();
-                write_append(
-                    &first_conf,
-                    &to_string_pretty(
-                        &Config::default(),
-                        PrettyConfig::new().new_line("\n".to_string()),
-                    )
-                    .unwrap_or_default(),
-                );
-                first_conf
-            })
+        Self::existing_config_path().unwrap_or_else(|| {
+            let new_config_path = Self::default_config_path();
+            write_append(
+                &new_config_path,
+                &to_string_pretty(
+                    &Config::default(),
+                    PrettyConfig::new().new_line("\n".to_string()),
+                )
+                .unwrap_or_default(),
+            );
+            new_config_path
+        })
     }
 
 

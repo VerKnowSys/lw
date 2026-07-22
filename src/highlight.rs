@@ -18,7 +18,14 @@ const ANSI_RESET: &str = "\x1b[0m";
 /// Process-wide highlighter, initialised on first use.
 static HIGHLIGHTER: OnceLock<Highlighter> = OnceLock::new();
 
-/// Return the shared [`Highlighter`], building it on first access.
+/// Initialise the shared highlighter with the given theme. Only the first call
+/// takes effect, so call this once at startup before any highlighting happens.
+pub fn init(theme_name: &str) {
+    let _ = HIGHLIGHTER.set(Highlighter::new(theme_name));
+}
+
+/// Return the shared [`Highlighter`], building it with the default theme if it
+/// has not been [`init`]ialised yet.
 pub fn highlighter() -> &'static Highlighter {
     HIGHLIGHTER.get_or_init(|| Highlighter::new(DEFAULT_THEME))
 }

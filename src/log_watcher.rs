@@ -27,12 +27,16 @@ use colored::Colorize;
 use fern::Dispatch;
 use kqueue2::{Ident::*, Watcher};
 use lw::config::Config;
+use lw::consts::DEFAULT_THEME;
 use lw::types::FileAndPosition;
 use lw::utils::{process_file_event, walkdir_recursive, watch_the_watcher};
 use std::{env, fs::OpenOptions, path::Path, process::exit, thread, time::Duration};
 
 
 fn main() {
+    // Note whether a config existed *before* loading, since load() creates a
+    // default one when missing. We report it once the logger is initialised.
+    let wrote_default_config = Config::existing_config_path().is_none();
     let config = Config::load();
     let log_level = config.get_log_level();
     let output = config.output.clone().unwrap_or_default();
@@ -72,6 +76,16 @@ fn main() {
         )
         .apply()
         .expect("Couldn't initialize Fern logger!");
+
+    if wrote_default_config {
+        info!(
+            "No configuration file found — wrote defaults to: {}",
+            Config::default_config_path().cyan()
+        );
+    }
+
+    // Initialise syntax highlighting with the configured theme.
+    lw::highlight::init(config.theme.as_deref().unwrap_or(DEFAULT_THEME));
 
     debug!("Watching paths: {}", paths_to_watch.join(", "));
     if paths_to_watch.is_empty() {

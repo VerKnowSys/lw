@@ -97,7 +97,12 @@ pub fn walkdir_recursive(
         .filter_map(|element| element.ok())
         .filter(|element| !is_ignored(element.path(), ignore_patterns))
         .for_each(|element| {
-            watch_file(kqueue_watcher, watched_file_states, last_file, element.path())
+            watch_file(
+                kqueue_watcher,
+                watched_file_states,
+                last_file,
+                element.path(),
+            )
         });
 }
 
@@ -113,7 +118,10 @@ pub fn process_file_event(
     let file_path = Path::new(&abs_file_name);
     // Skip transient temp/swap/backup files (e.g. rustfmt's `foo.rs.tmp.PID`);
     // the real file's own rename event shows the diff under its proper name.
-    if is_ignored(file_path, config.ignore_patterns.as_deref().unwrap_or_default()) {
+    if is_ignored(
+        file_path,
+        config.ignore_patterns.as_deref().unwrap_or_default(),
+    ) {
         trace!("{}: {}", "-Ignored".magenta(), abs_file_name.cyan());
         return;
     }
@@ -334,7 +342,12 @@ fn should_print_header(file_position: u64, last_file: &str, watched_file: &str) 
 
 
 /// Handle action triggered by an event
-fn handle_file_event(file_position: u64, file_size: u64, file_path: &str, last_file: &mut String) {
+fn handle_file_event(
+    file_position: u64,
+    file_size: u64,
+    file_path: &str,
+    last_file: &mut String,
+) {
     let watched_file = file_path.to_string();
 
     debug!(
@@ -540,7 +553,10 @@ mod tests {
     #[test]
     fn glob_handles_embedded_star() {
         // rustfmt temp file: name.ext.tmp.PID.HASH
-        assert!(matches_glob("log_watcher.rs.tmp.29966.0e8daadcf5e2", "*.tmp.*"));
+        assert!(matches_glob(
+            "log_watcher.rs.tmp.29966.0e8daadcf5e2",
+            "*.tmp.*"
+        ));
         assert!(!matches_glob("log_watcher.rs", "*.tmp.*"));
     }
 
@@ -558,7 +574,10 @@ mod tests {
     fn common_editor_temp_files_are_ignored() {
         let patterns = default_patterns();
         for name in ["notes.txt~", ".main.rs.swp", "patch.orig", "data.bak"] {
-            assert!(is_ignored(Path::new(name), &patterns), "should ignore {name}");
+            assert!(
+                is_ignored(Path::new(name), &patterns),
+                "should ignore {name}"
+            );
         }
     }
 
