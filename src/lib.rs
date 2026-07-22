@@ -35,5 +35,6 @@ extern crate log;
 
 pub mod config;
 pub mod consts;
+pub mod highlight;
 pub mod types;
 pub mod utils;

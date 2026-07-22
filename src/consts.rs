@@ -25,3 +25,6 @@ pub const DEFAULT_IGNORE_PATTERNS: &[&str] = &[
     "*.orig",  // merge / patch leftovers
     "*.bak",   // backups
 ];
+
+/// Default syntect theme used for syntax-highlighted file output.
+pub const DEFAULT_THEME: &str = "base16-ocean.dark";

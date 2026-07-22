@@ -7,7 +7,7 @@ use colored::Colorize;
 use kqueue2::*;
 use std::{
     fs::{File, OpenOptions, metadata},
-    io::{BufReader, SeekFrom, Write, prelude::*},
+    io::{BufReader, IsTerminal, SeekFrom, Write, prelude::*},
     os::unix::fs::MetadataExt,
     path::Path,
 };
@@ -363,10 +363,25 @@ fn handle_file_event(file_position: u64, file_size: u64, file_path: &str, last_f
     // print content of the file that triggered the event
     if file_position < file_size {
         let content = seek_file_to_position_and_read(&watched_file, file_position);
-        println!("{}", content.join("\n"));
+        println!("{}", render_content(&watched_file, content).join("\n"));
     }
 
     *last_file = watched_file;
+}
+
+
+/// Syntax-highlight file content for terminal output, keyed on the file
+/// extension. When stdout is not a terminal (piped / redirected) the raw lines
+/// are returned unchanged, so captured output stays free of ANSI escapes.
+fn render_content(file_path: &str, lines: Vec<String>) -> Vec<String> {
+    if !std::io::stdout().is_terminal() {
+        return lines;
+    }
+    let extension = Path::new(file_path)
+        .extension()
+        .and_then(|ext| ext.to_str())
+        .unwrap_or_default();
+    crate::highlight::highlighter().highlight(extension, &lines)
 }
 
 
