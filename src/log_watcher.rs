@@ -122,7 +122,7 @@ fn main() {
                     watch_the_watcher(&mut kqueue_watcher);
                 }
 
-                event => warn!("Unknown event: {}", format!("{:?}", event).cyan()),
+                event => warn!("Unknown event: {}", format!("{event:?}").cyan()),
             }
         }
 

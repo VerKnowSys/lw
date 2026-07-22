@@ -49,7 +49,10 @@ impl Highlighter {
             .or_else(|| themes.remove("base16-ocean.dark"))
             .or_else(|| themes.values().next().cloned())
             .unwrap_or_default();
-        Highlighter { syntaxes, theme }
+        Highlighter {
+            syntaxes,
+            theme,
+        }
     }
 
     /// Highlight `lines` as source of the language matching `extension`,
@@ -63,11 +66,17 @@ impl Highlighter {
         let mut highlighter = HighlightLines::new(syntax, &self.theme);
         lines
             .iter()
-            .map(|line| match highlighter.highlight_line(line, &self.syntaxes) {
-                Ok(ranges) => {
-                    format!("{}{}", as_24_bit_terminal_escaped(&ranges, false), ANSI_RESET)
+            .map(|line| {
+                match highlighter.highlight_line(line, &self.syntaxes) {
+                    Ok(ranges) => {
+                        format!(
+                            "{}{}",
+                            as_24_bit_terminal_escaped(&ranges, false),
+                            ANSI_RESET
+                        )
+                    }
+                    Err(_) => line.clone(),
                 }
-                Err(_) => line.clone(),
             })
             .collect()
     }
@@ -84,7 +93,11 @@ mod tests {
         let out = highlighter.highlight("rs", &["fn main() {}".to_string()]);
         assert_eq!(out.len(), 1);
         // Rust source should be colored -> contains ANSI escape sequences.
-        assert!(out[0].contains('\x1b'), "expected ANSI codes, got {:?}", out[0]);
+        assert!(
+            out[0].contains('\x1b'),
+            "expected ANSI codes, got {:?}",
+            out[0]
+        );
         assert!(out[0].contains("main"));
     }
 
@@ -93,7 +106,8 @@ mod tests {
         let highlighter = Highlighter::new("base16-ocean.dark");
         // Plain text still round-trips the content (possibly with color codes),
         // and must preserve the original text.
-        let out = highlighter.highlight("this-ext-does-not-exist", &["hello world".to_string()]);
+        let out =
+            highlighter.highlight("this-ext-does-not-exist", &["hello world".to_string()]);
         assert_eq!(out.len(), 1);
         assert!(out[0].contains("hello world"));
     }

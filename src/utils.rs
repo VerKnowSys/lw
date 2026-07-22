@@ -20,17 +20,13 @@ pub fn write_append(file_path: &str, contents: &str) {
         match OpenOptions::new().create(true).append(true).open(file_path) {
             Ok(mut file) => {
                 file.write_all(contents.as_bytes()).unwrap_or_else(|_| {
-                    panic!("Access denied? File can't be written: {}", &file_path)
+                    panic!("Access denied? File can't be written: {file_path}")
                 });
-                debug!("Atomically written data to file: {}", &file_path);
+                debug!("Atomically written data to file: {file_path}");
             }
 
             Err(err) => {
-                error!(
-                    "Atomic write to: {} has failed! Cause: {}",
-                    &file_path,
-                    err.to_string()
-                )
+                error!("Atomic write to: {file_path} has failed! Cause: {err}")
             }
         }
     }
@@ -153,9 +149,8 @@ pub fn process_file_event(
             // handle situation when logs are wiped out and unavailable to read anymore
             kqueue_watcher
                 .remove_filename(file_path, EventFilter::EVFILT_VNODE)
-                .map(|e| {
+                .inspect(|_| {
                     trace!("{}: {}", "-Watch".magenta(), abs_file_name.cyan());
-                    e
                 })
                 .unwrap_or_else(|error| {
                     error!(
@@ -181,7 +176,7 @@ pub fn process_file_event(
             } else {
                 debug!(
                     "Dropped watch on file/dir: {}. Last value: {}. Error cause: {}",
-                    format!("{:?}", &file_path).cyan(),
+                    format!("{file_path:?}").cyan(),
                     format!(
                         "{:?}",
                         watched_file_states
@@ -189,14 +184,14 @@ pub fn process_file_event(
                             .unwrap_or_default()
                     )
                     .cyan(),
-                    format!("{}", &error_cause).red()
+                    format!("{error_cause}").red()
                 );
             }
         }
     };
     debug!(
         "Watched files list: [{}]",
-        format!("{:?}", watched_file_states).cyan()
+        format!("{watched_file_states:?}").cyan()
     );
 }
 
@@ -288,28 +283,27 @@ fn watch_file(
     //   original), so show its new content from the start under the real name.
     //   This makes replacement detection work even when the file's own vnode
     //   event is lost to the concurrent directory re-walk.
-    if let Ok(file_metadata) = metadata(file) {
-        if file_metadata.is_file() {
-            let inode = file_metadata.ino();
-            let size = file_metadata.len();
-            let key = file.to_string_lossy().to_string();
-            match watched_file_states.get(&key).copied() {
-                Some((stored_inode, _)) if stored_inode != inode => {
-                    handle_file_event(0, size, &key, last_file);
-                    watched_file_states.insert(key, (inode, size));
-                }
-                Some(_) => {}
-                None => {
-                    watched_file_states.insert(key, (inode, size));
-                }
+    if let Ok(file_metadata) = metadata(file)
+        && file_metadata.is_file()
+    {
+        let inode = file_metadata.ino();
+        let size = file_metadata.len();
+        let key = file.to_string_lossy().to_string();
+        match watched_file_states.get(&key).copied() {
+            Some((stored_inode, _)) if stored_inode != inode => {
+                handle_file_event(0, size, &key, last_file);
+                watched_file_states.insert(key, (inode, size));
+            }
+            Some(_) => {}
+            None => {
+                watched_file_states.insert(key, (inode, size));
             }
         }
     }
     kqueue_watcher
         .remove_filename(file, EventFilter::EVFILT_VNODE)
-        .map(|e| {
-            trace!("{}: {}", "-Watch".magenta(), format!("{:?}", file).cyan());
-            e
+        .inspect(|_| {
+            trace!("{}: {}", "-Watch".magenta(), format!("{file:?}").cyan());
         })
         .unwrap_or_default();
     kqueue_watcher
@@ -319,14 +313,13 @@ fn watch_file(
             NOTE_WRITE | NOTE_LINK | NOTE_RENAME | NOTE_DELETE | NOTE_EXTEND, // | NOTE_ATTRIB
                                                                               // | NOTE_REVOKE,
         )
-        .map(|e| {
-            trace!("{}: {}", "+Watch".magenta(), format!("{:?}", file).cyan());
-            e
+        .inspect(|_| {
+            trace!("{}: {}", "+Watch".magenta(), format!("{file:?}").cyan());
         })
         .unwrap_or_else(|error_cause| {
             error!(
                 "Could not watch file: {}. Caused by: {}",
-                format!("{:?}", file).cyan(),
+                format!("{file:?}").cyan(),
                 error_cause.to_string().red()
             )
         });
@@ -352,15 +345,15 @@ fn handle_file_event(
 
     debug!(
         "Watched file position: {}, file size: {}, file name: {}",
-        format!("{}", file_position).cyan(),
-        format!("{}", file_size).cyan(),
+        format!("{file_position}").cyan(),
+        format!("{file_size}").cyan(),
         watched_file.cyan()
     );
     trace!(
         "{}: {} {}",
         "+EventHandle".magenta(),
         watched_file.cyan(),
-        format!("@{}", file_position).black()
+        format!("@{file_position}").black()
     );
 
     if should_print_header(file_position, last_file, &watched_file) {
@@ -369,7 +362,7 @@ fn handle_file_event(
         info!(
             "{} {}",
             watched_file.blue(),
-            format!("@{}", file_position).black()
+            format!("@{file_position}").black()
         );
     }
 
@@ -404,8 +397,8 @@ fn seek_file_to_position_and_read(file_to_watch: &str, file_position: u64) -> Ve
         Ok(some_file) => {
             let mut cursor = BufReader::new(some_file);
             cursor.seek(SeekFrom::Start(file_position)).unwrap_or(0);
-            let lines_out: Vec<_> = cursor.lines().filter_map(|line| line.ok()).collect();
-            trace!("Lines out: '{}'", format!("{:?}", lines_out).cyan());
+            let lines_out: Vec<_> = cursor.lines().map_while(Result::ok).collect();
+            trace!("Lines out: '{}'", format!("{lines_out:?}").cyan());
             if lines_out.is_empty() {
                 vec![String::from("* binary file modification *")]
             } else {

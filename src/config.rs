@@ -1,7 +1,8 @@
 //! Configuration model and loading (RON-backed, with sane defaults).
 
 use crate::consts::{
-    DEFAULT_IGNORE_PATTERNS, DEFAULT_THEME, MAX_DIR_DEPTH, MAX_OPEN_FILES, STDOUT_DEV, TAIL_BYTES,
+    DEFAULT_IGNORE_PATTERNS, DEFAULT_THEME, MAX_DIR_DEPTH, MAX_OPEN_FILES, STDOUT_DEV,
+    TAIL_BYTES,
 };
 use crate::utils::write_append;
 use std::{
@@ -91,7 +92,7 @@ impl Config {
         let config = Config::get_or_create();
         read_to_string(&config)
             .and_then(|file_contents| {
-                ron::from_str(&*file_contents).map_err(|err| {
+                ron::from_str(&file_contents).map_err(|err| {
                     let config_error = Error::new(ErrorKind::InvalidInput, err.to_string());
                     error!(
                         "Configuration error: {} in file: {}",
