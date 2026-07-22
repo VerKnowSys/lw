@@ -7,7 +7,7 @@ keywords = ["kqueue", "log", "watch", "tail", "view"]
 categories = ["filesystem"]
 homepage = "https://github.com/VerKnowSys/lw"
 license = "MIT"
-edition = "2021"
+edition = "2024"
 
 [[bin]]
 name = "lw"
@@ -60,7 +60,7 @@ rpath = true
 lto = false
 debug-assertions = false
 codegen-units = 4
-incremental = true
+incremental = false
 overflow-checks = false
 
 
@@ -80,10 +80,10 @@ lto = false                   # Link Time Optimization usually reduces size of b
                               # If true, passes `-C lto` flag to the compiler, and if a
                               # string is specified like 'thin' then `-C lto=thin` will
                               # be passed.
-codegen-units = 4             # if > 1 enables parallel code generation which improves
+codegen-units = 8             # if > 1 enables parallel code generation which improves
                               # compile times, but prevents some optimizations.
                               # Passes `-C codegen-units`.
 panic = 'unwind'              # panic strategy (`-C panic=...`), can also be 'abort'
-incremental = true            # whether or not incremental compilation is enabled
+incremental = false           # whether or not incremental compilation is enabled
 overflow-checks = false       # use overflow checks for integer arithmetic.
                               # Passes the `-C overflow-checks=...` flag to the compiler.
