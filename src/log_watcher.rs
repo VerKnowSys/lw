@@ -48,7 +48,7 @@ use kqueue2::{Ident::*, *};
 use std::{
     collections::HashMap,
     env,
-    fs::{metadata, File},
+    fs::{metadata, File, OpenOptions},
     io::{prelude::*, BufReader, SeekFrom},
     path::Path,
     process::exit,
@@ -58,6 +58,7 @@ use std::{
 use chrono::Local;
 use colored::Colorize;
 use fern::Dispatch;
+use std::os::unix::fs::MetadataExt;
 use std::time::Duration;
 use walkdir::WalkDir;
 
@@ -65,12 +66,23 @@ use walkdir::WalkDir;
 mod config;
 
 
-/// FileAndPosition alias type for HashMap of File path and file cursor position (in bytes)
-type FileAndPosition = HashMap<String, u64>;
+/// Per-file watch state: the file's inode number and the last read byte
+/// position. The inode lets us detect when a path was replaced by a brand new
+/// file (atomic rename, log rotation) so we can re-read it from the start.
+type FileState = (u64, u64);
+
+
+/// FileAndPosition alias type: maps a watched file path to its [`FileState`].
+type FileAndPosition = HashMap<String, FileState>;
 
 
 /// Resursively filter out all unreadable/unaccessible/inproper and handle proper files
-fn walkdir_recursive(kqueue_watcher: &mut Watcher, file_path: &Path, config: &Config) {
+fn walkdir_recursive(
+    kqueue_watcher: &mut Watcher,
+    watched_file_states: &mut FileAndPosition,
+    file_path: &Path,
+    config: &Config,
+) {
     WalkDir::new(&file_path)
         .same_file_system(false)
         .contents_first(true)
@@ -79,7 +91,7 @@ fn walkdir_recursive(kqueue_watcher: &mut Watcher, file_path: &Path, config: &Co
         .max_depth(config.max_dir_depth.unwrap_or_default())
         .into_iter()
         .filter_map(|element| element.ok())
-        .for_each(|element| watch_file(kqueue_watcher, element.path()));
+        .for_each(|element| watch_file(kqueue_watcher, watched_file_states, element.path()));
 }
 
 
@@ -112,9 +124,15 @@ fn main() {
             ))
         })
         .level(log_level)
-        .chain(File::open(output.clone()).unwrap_or_else(|_| {
-            panic!("{}: Couldn't open: {}!", "FATAL ERROR".red(), output.cyan())
-        }))
+        .chain(
+            OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(output.clone())
+                .unwrap_or_else(|_| {
+                    panic!("{}: Couldn't open: {}!", "FATAL ERROR".red(), output.cyan())
+                }),
+        )
         .apply()
         .expect("Couldn't initialize Fern logger!");
 
@@ -127,7 +145,12 @@ fn main() {
     // initial watches for specified dirs/files:
     paths_to_watch.into_iter().for_each(|a_path| {
         // Handle case when given a file as argument
-        walkdir_recursive(&mut kqueue_watcher, Path::new(&a_path), &config);
+        walkdir_recursive(
+            &mut kqueue_watcher,
+            &mut watched_file_states,
+            Path::new(&a_path),
+            &config,
+        );
     });
 
     // handle events dynamically, including new files
@@ -181,10 +204,11 @@ fn process_file_event(
         Ok(file_metadata) => {
             if file_metadata.is_dir() {
                 trace!("{}: {}", "+DirLoad".magenta(), abs_file_name.cyan());
-                walkdir_recursive(kqueue_watcher, file_path, config);
+                walkdir_recursive(kqueue_watcher, watched_file_states, file_path, config);
             } else {
                 trace!("{}: {}", "+FileWatchHandle".magenta(), abs_file_name.cyan());
                 calculate_position_and_handle(
+                    file_metadata.ino(),
                     file_metadata.len(),
                     watched_file_states,
                     abs_file_name,
@@ -213,16 +237,16 @@ fn process_file_event(
             if file_path.exists() {
                 if file_path.is_dir() {
                     trace!("{}: {}", "+DirLoad".magenta(), abs_file_name.cyan());
-                    walkdir_recursive(kqueue_watcher, file_path, config);
+                    walkdir_recursive(kqueue_watcher, watched_file_states, file_path, config);
                 } else if file_path.is_file() {
-                    watch_file(kqueue_watcher, file_path);
+                    watch_file(kqueue_watcher, watched_file_states, file_path);
                 }
             } else {
                 debug!(
                     "Dropped watch on file/dir: {}. Last value: {}. Error cause: {}",
                     format!("{:?}", &file_path).cyan(),
                     format!(
-                        "{}",
+                        "{:?}",
                         watched_file_states
                             .remove(abs_file_name)
                             .unwrap_or_default()
@@ -242,6 +266,7 @@ fn process_file_event(
 
 /// Process file position and handle the event
 fn calculate_position_and_handle(
+    inode: u64,
     file_size: u64,
     watched_file_states: &mut FileAndPosition,
     abs_file_name: &str,
@@ -249,25 +274,31 @@ fn calculate_position_and_handle(
     config: &Config,
 ) {
     let tail_bytes = config.tail_bytes.unwrap_or_default();
-    let initial_file_position =
-        if file_size + 1 > tail_bytes && !watched_file_states.contains_key(abs_file_name) {
-            file_size - tail_bytes
-        } else {
-            *watched_file_states.get(abs_file_name).unwrap_or(&0)
-        };
-    if watched_file_states.contains_key(abs_file_name) {
-        let current_position = *watched_file_states
-            .get(abs_file_name)
-            .unwrap_or(&initial_file_position);
-        handle_file_event(current_position, file_size, abs_file_name, last_file);
-        let _removed = watched_file_states
-            .remove(abs_file_name)
-            .unwrap_or_default();
-        watched_file_states.insert(abs_file_name.to_string(), file_size);
-    } else {
-        watched_file_states.insert(abs_file_name.to_string(), initial_file_position);
-        handle_file_event(initial_file_position, file_size, abs_file_name, last_file);
-    }
+
+    // Decide where to start reading from:
+    let position = match watched_file_states.get(abs_file_name) {
+        // Known file, same inode: continue from the last recorded byte offset,
+        // unless the file shrank (truncation) — then re-read from the start.
+        Some(&(last_inode, last_position)) if last_inode == inode => {
+            if last_position > file_size {
+                0
+            } else {
+                last_position
+            }
+        }
+        // Path replaced by a new file (atomic rename / rotation), i.e. a
+        // different inode: read the whole new file from the beginning.
+        Some(_) => 0,
+        // First time we see this file: skip to the tail so we don't dump the
+        // whole pre-existing content (mirrors `tail -F` behaviour).
+        None => file_size.saturating_sub(tail_bytes),
+    };
+
+    handle_file_event(position, file_size, abs_file_name, last_file);
+
+    // Record the current inode and end offset so the next event shows only
+    // newly added data (or a full re-read if the file is replaced/truncated).
+    watched_file_states.insert(abs_file_name.to_string(), (inode, file_size));
 }
 
 
@@ -288,7 +319,20 @@ fn watch_the_watcher(kqueue_watcher: &mut Watcher) {
 /// NOTE_REVOKE     0x00000040              /* vnode access was revoked */
 ///
 /// Add watch on specified file path
-fn watch_file(kqueue_watcher: &mut Watcher, file: &Path) {
+fn watch_file(
+    kqueue_watcher: &mut Watcher,
+    watched_file_states: &mut FileAndPosition,
+    file: &Path,
+) {
+    // Seed the current size as the starting cursor so the first modification
+    // shows only the appended data (a proper diff), not the whole tail.
+    if let Ok(file_metadata) = metadata(file) {
+        if file_metadata.is_file() {
+            watched_file_states
+                .entry(file.to_string_lossy().to_string())
+                .or_insert((file_metadata.ino(), file_metadata.len()));
+        }
+    }
     kqueue_watcher
         .remove_filename(file, EventFilter::EVFILT_VNODE)
         .map(|e| {
