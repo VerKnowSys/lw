@@ -14,16 +14,16 @@ name = "lw"
 path = "src/log_watcher.rs"
 
 [dependencies]
-log = "0.4.17"
-fern = { version = "0.6.1", features = ["colored"] } # my fav Logger extension for Rust
-colored = "2.0.0"
-walkdir = "2.3.2"
-chrono = "0.4.19"
+log = "0.4.33"
+fern = { version = "0.7.1", features = ["colored"] } # my fav Logger extension for Rust
+colored = "3.1.1"
+walkdir = "2.5.0"
+chrono = "0.4.45"
 kqueue2 = "0.2.3"
 kqueue2-sys = "0.1.5"
-mimalloc = "0.1.29"
-serde = { version = "1.0.138", features = ["derive"] }
-ron = "0.7.1"
+mimalloc = "0.1.52"
+serde = { version = "1.0.229", features = ["derive"] }
+ron = "0.12.2"
 
 
 # The release profile, used for `cargo build --release`.
