@@ -23,6 +23,7 @@ kqueue2 = "0.2.3"
 kqueue2-sys = "0.1.5"
 mimalloc = "0.1.52"
 serde = { version = "1.0.229", features = ["derive"] }
+syntect = { version = "5.2", default-features = false, features = ["default-fancy"] }
 ron = "0.12.2"
 
 
