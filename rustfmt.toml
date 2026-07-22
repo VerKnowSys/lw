@@ -1,5 +1,4 @@
-edition = "2018"
-version = "Two"
+edition = "2024"
 unstable_features = true
 
 indent_style = "Block"
