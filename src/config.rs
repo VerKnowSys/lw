@@ -48,6 +48,12 @@ pub struct Config {
     /// "base16-ocean.dark", "Solarized (dark)", "InspiredGitHub").
     #[serde(default = "default_theme")]
     pub theme: Option<String>,
+
+    /// [`Self::ignore_patterns`] precompiled to char slices. Derived (never
+    /// serialized): filled once by [`Config::with_compiled_globs`] so filename
+    /// matching in the event hot path never re-parses the pattern strings.
+    #[serde(skip)]
+    ignore_globs: Vec<Vec<char>>,
 }
 
 
@@ -81,18 +87,21 @@ impl Default for Config {
             follow_links: Some(true),
             ignore_patterns: default_ignore_patterns(),
             theme: default_theme(),
+            ignore_globs: Vec::new(),
         }
+        .with_compiled_globs()
     }
 }
 
 
 impl Config {
-    /// Load Krecik configuration file
+    /// Load the `lw` configuration file, falling back to defaults if it is
+    /// missing or invalid.
     pub fn load() -> Config {
         let config = Config::get_or_create();
         read_to_string(&config)
             .and_then(|file_contents| {
-                ron::from_str(&file_contents).map_err(|err| {
+                ron::from_str::<Config>(&file_contents).map_err(|err| {
                     let config_error = Error::new(ErrorKind::InvalidInput, err.to_string());
                     error!(
                         "Configuration error: {} in file: {}",
@@ -102,7 +111,30 @@ impl Config {
                     config_error
                 })
             })
+            .map(Config::with_compiled_globs)
             .unwrap_or_default()
+    }
+
+
+    /// Precompile [`Self::ignore_patterns`] into `ignore_globs`. Runs after
+    /// load/deserialization (which leaves the derived field empty) and inside
+    /// [`Config::default`], so the compiled globs are always in sync.
+    fn with_compiled_globs(mut self) -> Self {
+        self.ignore_globs = self
+            .ignore_patterns
+            .as_deref()
+            .unwrap_or_default()
+            .iter()
+            .map(|pattern| pattern.chars().collect())
+            .collect();
+        self
+    }
+
+
+    /// Ignore patterns precompiled to char slices for matching (see
+    /// [`Self::ignore_patterns`]).
+    pub fn ignore_globs(&self) -> &[Vec<char>] {
+        &self.ignore_globs
     }
 
 
@@ -156,5 +188,49 @@ impl Config {
             "TRACE" => LevelFilter::Trace,
             _ => LevelFilter::Info,
         }
+    }
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::Config;
+    use ron::ser::{PrettyConfig, to_string_pretty};
+
+    /// The default config precompiles its ignore globs eagerly.
+    #[test]
+    fn default_has_compiled_ignore_globs() {
+        let config = Config::default();
+        assert_eq!(
+            config.ignore_globs().len(),
+            config.ignore_patterns.as_deref().unwrap_or_default().len()
+        );
+        assert!(!config.ignore_globs().is_empty());
+    }
+
+    /// The derived `ignore_globs` field is never written to the config file
+    /// (only the human-editable `ignore_patterns` is).
+    #[test]
+    fn serialized_config_omits_derived_globs() {
+        let ron = to_string_pretty(&Config::default(), PrettyConfig::new()).unwrap();
+        assert!(!ron.contains("ignore_globs"), "derived field leaked: {ron}");
+        assert!(ron.contains("ignore_patterns"));
+    }
+
+    /// A config parsed from RON (which leaves the derived field empty) has its
+    /// globs recompiled by `with_compiled_globs`, matching its patterns.
+    #[test]
+    fn parsed_config_recompiles_globs() {
+        let ron = to_string_pretty(&Config::default(), PrettyConfig::new()).unwrap();
+        let parsed: Config = ron::from_str(&ron).unwrap();
+        assert!(
+            parsed.ignore_globs().is_empty(),
+            "skipped field should deserialize empty"
+        );
+        let finalized = parsed.with_compiled_globs();
+        assert_eq!(
+            finalized.ignore_globs().len(),
+            finalized.ignore_patterns.as_deref().unwrap_or_default().len()
+        );
     }
 }

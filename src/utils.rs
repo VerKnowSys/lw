@@ -68,15 +68,14 @@ fn matches_glob(name: &str, pattern: &str) -> bool {
 
 
 /// Whether the file at `path` should be ignored, i.e. its file name matches any
-/// of the given glob `patterns`. Used to skip transient temp/swap/backup files.
-fn is_ignored(path: &Path, patterns: &[String]) -> bool {
+/// of the given precompiled `globs`. Used to skip transient temp/swap/backup
+/// files.
+fn is_ignored(path: &Path, globs: &[Vec<char>]) -> bool {
     match path.file_name().and_then(|name| name.to_str()) {
-        // Collect the file name's chars once, then test each pattern against it.
+        // Collect the file name's chars once, then test each glob against it.
         Some(name) => {
             let name: Vec<char> = name.chars().collect();
-            patterns
-                .iter()
-                .any(|pattern| glob_match(&name, &pattern.chars().collect::<Vec<_>>()))
+            globs.iter().any(|glob| glob_match(&name, glob))
         }
         None => false,
     }
@@ -91,7 +90,7 @@ pub fn walkdir_recursive(
     file_path: &Path,
     config: &Config,
 ) {
-    let ignore_patterns = config.ignore_patterns.as_deref().unwrap_or_default();
+    let ignore_globs = config.ignore_globs();
     WalkDir::new(file_path)
         .same_file_system(false)
         .contents_first(true)
@@ -100,7 +99,7 @@ pub fn walkdir_recursive(
         .max_depth(config.max_dir_depth.unwrap_or_default())
         .into_iter()
         .filter_map(|element| element.ok())
-        .filter(|element| !is_ignored(element.path(), ignore_patterns))
+        .filter(|element| !is_ignored(element.path(), ignore_globs))
         .for_each(|element| {
             watch_file(
                 kqueue_watcher,
@@ -123,10 +122,7 @@ pub fn process_file_event(
     let file_path = Path::new(&abs_file_name);
     // Skip transient temp/swap/backup files (e.g. rustfmt's `foo.rs.tmp.PID`);
     // the real file's own rename event shows the diff under its proper name.
-    if is_ignored(
-        file_path,
-        config.ignore_patterns.as_deref().unwrap_or_default(),
-    ) {
+    if is_ignored(file_path, config.ignore_globs()) {
         trace!("{}: {}", "-Ignored".magenta(), abs_file_name.cyan());
         return;
     }
@@ -440,11 +436,12 @@ mod tests {
     use std::fs;
     use std::path::Path;
 
-    /// The built-in ignore patterns as owned strings (as a live `Config` holds them).
-    fn default_patterns() -> Vec<String> {
+    /// The built-in ignore patterns precompiled to char slices (as a live
+    /// `Config` holds them via `ignore_globs()`).
+    fn default_globs() -> Vec<Vec<char>> {
         DEFAULT_IGNORE_PATTERNS
             .iter()
-            .map(|pattern| pattern.to_string())
+            .map(|pattern| pattern.chars().collect())
             .collect()
     }
 
@@ -567,20 +564,20 @@ mod tests {
 
     #[test]
     fn rustfmt_temp_file_is_ignored_but_real_file_is_not() {
-        let patterns = default_patterns();
+        let globs = default_globs();
         assert!(is_ignored(
             Path::new("./src/log_watcher.rs.tmp.29966.0e8daadcf5e2"),
-            &patterns
+            &globs
         ));
-        assert!(!is_ignored(Path::new("./src/log_watcher.rs"), &patterns));
+        assert!(!is_ignored(Path::new("./src/log_watcher.rs"), &globs));
     }
 
     #[test]
     fn common_editor_temp_files_are_ignored() {
-        let patterns = default_patterns();
+        let globs = default_globs();
         for name in ["notes.txt~", ".main.rs.swp", "patch.orig", "data.bak"] {
             assert!(
-                is_ignored(Path::new(name), &patterns),
+                is_ignored(Path::new(name), &globs),
                 "should ignore {name}"
             );
         }

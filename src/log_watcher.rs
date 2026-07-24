@@ -69,7 +69,7 @@ fn main() {
             OpenOptions::new()
                 .create(true)
                 .append(true)
-                .open(output.clone())
+                .open(&output)
                 .unwrap_or_else(|_| {
                     panic!("{}: Couldn't open: {}!", "FATAL ERROR".red(), output.cyan())
                 }),
