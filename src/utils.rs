@@ -41,26 +41,29 @@ pub fn write_append(file_path: &str, contents: &str) {
 ///   retries `*` (advance the name);
 /// - `?` matches exactly one character;
 /// - any other character matches itself.
-fn matches_glob(name: &str, pattern: &str) -> bool {
-    fn go(name: &[char], pattern: &[char]) -> bool {
-        match pattern.split_first() {
-            None => name.is_empty(),
-            Some((&'*', rest)) => {
-                go(name, rest)
-                    || matches!(name.split_first(), Some((_, tail)) if go(tail, pattern))
-            }
-            Some((&'?', rest)) => {
-                matches!(name.split_first(), Some((_, tail)) if go(tail, rest))
-            }
-            Some((&expected, rest)) => {
-                matches!(name.split_first(), Some((&first, tail)) if first == expected && go(tail, rest))
-            }
+fn glob_match(name: &[char], pattern: &[char]) -> bool {
+    match pattern.split_first() {
+        None => name.is_empty(),
+        Some((&'*', rest)) => {
+            glob_match(name, rest)
+                || matches!(name.split_first(), Some((_, tail)) if glob_match(tail, pattern))
+        }
+        Some((&'?', rest)) => {
+            matches!(name.split_first(), Some((_, tail)) if glob_match(tail, rest))
+        }
+        Some((&expected, rest)) => {
+            matches!(name.split_first(), Some((&first, tail)) if first == expected && glob_match(tail, rest))
         }
     }
-    go(
-        &name.chars().collect::<Vec<_>>(),
-        &pattern.chars().collect::<Vec<_>>(),
-    )
+}
+
+
+/// Convenience wrapper over [`glob_match`] for whole `&str` inputs (test-only).
+#[cfg(test)]
+fn matches_glob(name: &str, pattern: &str) -> bool {
+    let name: Vec<char> = name.chars().collect();
+    let pattern: Vec<char> = pattern.chars().collect();
+    glob_match(&name, &pattern)
 }
 
 
@@ -68,7 +71,13 @@ fn matches_glob(name: &str, pattern: &str) -> bool {
 /// of the given glob `patterns`. Used to skip transient temp/swap/backup files.
 fn is_ignored(path: &Path, patterns: &[String]) -> bool {
     match path.file_name().and_then(|name| name.to_str()) {
-        Some(name) => patterns.iter().any(|pattern| matches_glob(name, pattern)),
+        // Collect the file name's chars once, then test each pattern against it.
+        Some(name) => {
+            let name: Vec<char> = name.chars().collect();
+            patterns
+                .iter()
+                .any(|pattern| glob_match(&name, &pattern.chars().collect::<Vec<_>>()))
+        }
         None => false,
     }
 }
