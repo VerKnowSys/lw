@@ -350,38 +350,41 @@ fn handle_file_event(
     file_path: &str,
     last_file: &mut String,
 ) {
-    let watched_file = file_path.to_string();
-
     debug!(
         "Watched file position: {}, file size: {}, file name: {}",
         format!("{file_position}").cyan(),
         format!("{file_size}").cyan(),
-        watched_file.cyan()
+        file_path.cyan()
     );
     trace!(
         "{}: {} {}",
         "+EventHandle".magenta(),
-        watched_file.cyan(),
+        file_path.cyan(),
         format!("@{file_position}").black()
     );
 
-    if should_print_header(file_position, last_file, &watched_file) {
+    if should_print_header(file_position, last_file, file_path) {
         println!();
         println!(); // just start new entry after \n\n
         info!(
             "{} {}",
-            watched_file.blue(),
+            file_path.blue(),
             format!("@{file_position}").black()
         );
     }
 
     // print content of the file that triggered the event
     if file_position < file_size {
-        let content = seek_file_to_position_and_read(&watched_file, file_position);
-        println!("{}", render_content(&watched_file, content).join("\n"));
+        let content = seek_file_to_position_and_read(file_path, file_position);
+        println!("{}", render_content(file_path, content).join("\n"));
     }
 
-    *last_file = watched_file;
+    // Remember the last file we printed; only rewrite the buffer when it
+    // actually changed, so consecutive appends to the same file allocate nothing.
+    if last_file != file_path {
+        last_file.clear();
+        last_file.push_str(file_path);
+    }
 }
 
 
