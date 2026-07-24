@@ -148,12 +148,10 @@ impl Config {
 
     /// Get LevelFilter (log level) from configuration
     pub fn get_log_level(&self) -> LevelFilter {
-        let level = self.log_level.clone().unwrap_or_default();
-        match &level[..] {
+        match self.log_level.as_deref().unwrap_or_default() {
             "OFF" => LevelFilter::Off,
             "ERROR" => LevelFilter::Error,
             "WARN" => LevelFilter::Warn,
-            "INFO" => LevelFilter::Info,
             "DEBUG" => LevelFilter::Debug,
             "TRACE" => LevelFilter::Trace,
             _ => LevelFilter::Info,
